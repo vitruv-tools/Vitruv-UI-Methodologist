@@ -4,26 +4,27 @@ import { FloatingUMLPanel } from '../../../components/canvas/FloatingUMLPanel';
 import type { UmlDiagramSaveContext } from '../../../components/canvas/UMLDiagram';
 
 let lastDiagramProps: Record<string, unknown> = {};
-const mockIsDirty = jest.fn(() => false);
-const mockTryEscape = jest.fn(() => false);
-const mockReload = jest.fn();
-const mockSave = jest.fn().mockResolvedValue(undefined);
+const mockIsDirty = vi.fn(() => false);
+const mockTryEscape = vi.fn(() => false);
+const mockReload = vi.fn();
+const mockSave = vi.fn().mockResolvedValue(undefined);
 
-jest.mock('../../../components/canvas/UMLDiagram', () => {
-  const { forwardRef, useImperativeHandle, createElement } = require('react');
+vi.mock('../../../components/canvas/UMLDiagram', async () => {
+  const { forwardRef, useImperativeHandle, createElement } = (await import('react'));
   return {
+    WORKSPACE_DOT_BACKGROUND: {},
     UMLDiagram: forwardRef((props: any, ref: any) => {
       lastDiagramProps = props;
       useImperativeHandle(ref, () => ({
-        zoomIn: jest.fn(),
-        zoomOut: jest.fn(),
-        fitToView: jest.fn(),
-        flushLayout: jest.fn(),
+        zoomIn: vi.fn(),
+        zoomOut: vi.fn(),
+        fitToView: vi.fn(),
+        flushLayout: vi.fn(),
         reload: mockReload,
-        undo: jest.fn(),
-        redo: jest.fn(),
-        canUndo: jest.fn(() => false),
-        canRedo: jest.fn(() => false),
+        undo: vi.fn(),
+        redo: vi.fn(),
+        canUndo: vi.fn(() => false),
+        canRedo: vi.fn(() => false),
         isDirty: mockIsDirty,
         save: mockSave,
         tryEscape: mockTryEscape,
@@ -33,14 +34,18 @@ jest.mock('../../../components/canvas/UMLDiagram', () => {
   };
 });
 
-jest.mock('../../../utils/umlLayoutStorage', () => ({
-  hasSavedUmlLayout: jest.fn(() => false),
+vi.mock('../../../utils/umlLayoutStorage', () => ({
+  hasSavedUmlLayout: vi.fn(() => false),
 }));
 
-jest.mock('react-dom', () => ({
-  ...jest.requireActual('react-dom'),
-  createPortal: (node: React.ReactNode) => node,
-}));
+vi.mock('react-dom', async () => {
+  const actual = await vi.importActual<any>('react-dom');
+  const mocked = {
+    ...actual,
+    createPortal: (node: React.ReactNode) => node,
+  };
+  return { ...mocked, default: mocked };
+});
 
 const defaultProps = {
   id: 'panel-1',
@@ -49,8 +54,8 @@ const defaultProps = {
   layoutScopeId: 'project-1',
   ecoreContent: '<xml/>',
   zIndex: 100,
-  onFocus: jest.fn(),
-  onClose: jest.fn(),
+  onFocus: vi.fn(),
+  onClose: vi.fn(),
 };
 
 const saveContext: UmlDiagramSaveContext = {
@@ -65,7 +70,7 @@ const flushScheduledSave = () => new Promise(resolve => setTimeout(resolve, 0));
 
 describe('FloatingUMLPanel', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     lastDiagramProps = {};
     mockIsDirty.mockReturnValue(false);
     mockTryEscape.mockReturnValue(false);
@@ -94,7 +99,7 @@ describe('FloatingUMLPanel', () => {
   });
 
   it('calls onClose with the panel id when the back button is clicked', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     render(<FloatingUMLPanel {...defaultProps} onClose={onClose} />);
     fireEvent.click(screen.getByTestId('uml-page-back'));
     expect(onClose).toHaveBeenCalledWith('panel-1');
@@ -116,7 +121,7 @@ describe('FloatingUMLPanel', () => {
   });
 
   it('calls onClose with the panel id when Escape is pressed', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     render(<FloatingUMLPanel {...defaultProps} onClose={onClose} />);
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledWith('panel-1');
@@ -124,7 +129,7 @@ describe('FloatingUMLPanel', () => {
 
   it('shows unsaved changes dialog when closing with dirty diagram', () => {
     mockIsDirty.mockReturnValue(true);
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     render(<FloatingUMLPanel {...defaultProps} onClose={onClose} />);
     fireEvent.click(screen.getByTestId('uml-page-back'));
     expect(screen.getByText('Unsaved Changes')).toBeInTheDocument();
@@ -146,7 +151,7 @@ describe('FloatingUMLPanel', () => {
 
   it('closes without saving when unsaved dialog is confirmed', () => {
     mockIsDirty.mockReturnValue(true);
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     render(<FloatingUMLPanel {...defaultProps} onClose={onClose} />);
     fireEvent.click(screen.getByTestId('uml-page-back'));
     fireEvent.click(screen.getByText('Close without saving'));
@@ -161,8 +166,8 @@ describe('FloatingUMLPanel', () => {
   });
 
   it('fetches ecore and reloads the diagram when reload is clicked', async () => {
-    const fetchEcoreFile = jest.fn().mockResolvedValue('<ecore>fresh</ecore>');
-    const onEcoreContentUpdated = jest.fn();
+    const fetchEcoreFile = vi.fn().mockResolvedValue('<ecore>fresh</ecore>');
+    const onEcoreContentUpdated = vi.fn();
     render(
       <FloatingUMLPanel
         {...defaultProps}
@@ -184,7 +189,7 @@ describe('FloatingUMLPanel', () => {
 
 describe('FloatingUMLPanel save shortcut', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockIsDirty.mockReturnValue(true);
   });
 
@@ -205,7 +210,7 @@ describe('FloatingUMLPanel save shortcut', () => {
     const input = document.createElement('input');
     document.body.appendChild(input);
     input.focus();
-    const onBlur = jest.fn();
+    const onBlur = vi.fn();
     input.addEventListener('blur', onBlur);
 
     const notPrevented = fireEvent.keyDown(input, { key: 's', metaKey: true });

@@ -3,17 +3,17 @@ import { useFastLoginCallback, navigateAfterFastLogin } from '../../hooks/useFas
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-const mockNavigate = jest.fn();
-const mockFastLoginWithCode = jest.fn();
+const mockNavigate = vi.fn();
+const mockFastLoginWithCode = vi.fn();
 
 // Mutable so individual tests can set the context user.
 let mockContextUser: any = null;
 
-jest.mock('react-router-dom', () => ({
+vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
 
-jest.mock('../../contexts/AuthContext', () => ({
+vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({ fastLoginWithCode: mockFastLoginWithCode, user: mockContextUser }),
 }));
 
@@ -27,7 +27,7 @@ function setSearch(search: string) {
 // ── navigateAfterFastLogin ────────────────────────────────────────────────────
 
 describe('navigateAfterFastLogin', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => vi.clearAllMocks());
 
   it('always navigates to /mml regardless of emailVerified', () => {
     navigateAfterFastLogin({ id: '1', username: 'kit-user', emailVerified: false }, mockNavigate);
@@ -44,7 +44,7 @@ describe('navigateAfterFastLogin', () => {
 
 describe('useFastLoginCallback', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockContextUser = null;
   });
 

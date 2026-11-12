@@ -2,6 +2,7 @@ import { AuthService } from './auth';
 import { FlowData } from '../types/flow';
 import { ApiResponse, Vsum, VsumDetails } from '../types/vsum';
 import { config } from '../config/environment';
+import type { VsumBuildResponse, VsumValidationResponse } from '../types/vsumBuild';
 
 class ApiService {
   private readonly baseURL = config.apiBaseUrl;
@@ -76,7 +77,7 @@ class ApiService {
       throw this.createApiError('', `${label} download returned an empty file`);
     }
 
-    const header = new Uint8Array(await new Response(blob.slice(0, 4)).arrayBuffer());
+    const header = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
     if (header[0] !== 0x50 || header[1] !== 0x4b) {
       const preview = await blob.slice(0, 512).text();
       throw this.createApiError(preview, `${label} download did not return a valid ZIP file`);
@@ -648,19 +649,62 @@ class ApiService {
    * vSUMS: Check if VSUM is buildable / trigger buildOrThrow
    * GET /api/v1/vsums/{id}/build/check
    */
-  async buildVsum(id: number | string): Promise<ApiResponse<Record<string, never>>> {
+  async buildVsum(id: number | string): Promise<ApiResponse<VsumBuildCheckResponse | null>> {
     return this.authenticatedRequest(`/api/v1/vsums/${id}/build/check`, {
       method: 'GET',
     });
   }
 
   /**
-   * vSUMS: Download artifact as ZIP file
-   * GET /api/v1/vsums/{id}/build/artifact
-   * Returns a ZIP file blob containing the build artifact
+   * vSUMS: Download the project as ZIP file
+   * GET /api/v1/vsums/{id}/project
+   * Returns a ZIP file blob containing the project laid out like the Methodologist Template,
+   * which the user builds with `mvn clean verify`
    */
-  async downloadVsumArtifact(id: number | string): Promise<Blob> {
-    return this.downloadVsumZip(`/api/v1/vsums/${id}/build/artifact`, 'Artifact');
+  async downloadVsumProject(id: number | string): Promise<Blob> {
+    return this.downloadVsumZip(`/api/v1/vsums/${id}/project`, 'Project');
+  }
+
+  /**
+   * vSUMS: Download the built, runnable VSUM jar
+   * GET /api/v1/vsums/{id}/build/artifact
+   * Waits for the Maven build of the VSUM and returns the jar-with-dependencies
+   */
+  async downloadVsumJar(id: number | string): Promise<Blob> {
+    return this.downloadVsumZip(`/api/v1/vsums/${id}/build/artifact`, 'Runnable JAR');
+  }
+
+  /**
+   * vSUMS: Start an asynchronous build (or reuse an up-to-date / running one)
+   * POST /api/v1/vsums/{id}/builds
+   */
+  async requestVsumBuild(
+    id: number | string,
+    force: boolean = false,
+  ): Promise<ApiResponse<VsumBuildResponse>> {
+    const query = force ? '?force=true' : '';
+    return this.authenticatedRequest(`/api/v1/vsums/${id}/builds${query}`, {
+      method: 'POST',
+    });
+  }
+
+  /**
+   * vSUMS: Current state of one asynchronous build; failed builds carry `errorCode` and `problems`
+   * GET /api/v1/vsums/{id}/builds/{buildId}
+   */
+  async getVsumBuild(
+    id: number | string,
+    buildId: number | string,
+  ): Promise<ApiResponse<VsumBuildResponse>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}/builds/${buildId}`);
+  }
+
+  /**
+   * vSUMS: Result of the validation the backend runs after each save
+   * GET /api/v1/vsums/{id}/validation
+   */
+  async getVsumValidation(id: number | string): Promise<ApiResponse<VsumValidationResponse>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}/validation`);
   }
 
   /**
@@ -978,6 +1022,60 @@ class ApiService {
     });
   }
 
+  // ── Utility methods ───────────────────────────────────────────────────────────────
+
+  getUtilityMethods(vsumId: number): Promise<UtilityMethodResponse[]> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods`);
+  }
+
+  createUtilityMethod(vsumId: number, body: UtilityMethodRequest): Promise<UtilityMethodResponse> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  updateUtilityMethod(vsumId: number, utilityMethodId: number, body: UtilityMethodRequest): Promise<UtilityMethodResponse> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods/${utilityMethodId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  deleteUtilityMethod(vsumId: number, utilityMethodId: number): Promise<void> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods/${utilityMethodId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /** Translates an unsaved utility method; problems are part of the response. */
+  previewUtilityMethod(vsumId: number, body: UtilityMethodRequest, utilityMethodId?: number): Promise<UtilityMethodPreviewResponse> {
+    const query = utilityMethodId === undefined ? '' : `?utilityMethodId=${utilityMethodId}`;
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods/preview${query}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  checkUtilityMethodName(vsumId: number, name: string, utilityMethodId?: number): Promise<UtilityMethodNameAvailabilityResponse> {
+    const params = new URLSearchParams({ name });
+    if (utilityMethodId !== undefined) params.set('utilityMethodId', String(utilityMethodId));
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods/name-availability?${params}`);
+  }
+
+  /** The Java utility class generated from all utility methods of the project. */
+  getUtilityMethodClass(vsumId: number): Promise<UtilityMethodClassResponse> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods/java`);
+  }
+
+  /** Metamodel types that utility methods of the project can use. */
+  getUtilityMethodTypes(vsumId: number): Promise<UtilityMethodTypeResponse[]> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods/types`);
+  }
+
   /**
    * Fetch Low Code reaction metadata (field definitions for the form editor).
    */
@@ -988,6 +1086,15 @@ class ApiService {
 
 // Export a singleton instance
 export const apiService = new ApiService();
+
+/** Result of a successful build check. */
+export interface VsumBuildCheckResponse {
+  /**
+   * The constraint rule sets built into the VSUM, each as its own OCL file; null if they changed
+   * during the build.
+   */
+  constraintRuleSets: string[] | null;
+}
 
 export interface RuleSetResponse {
   id: number;
@@ -1014,11 +1121,94 @@ export interface RuleSetPutRequest {
   oclContent?: string;
 }
 
+export interface UtilityMethodParameter {
+  name: string;
+  /** Xtend/Java type, e.g. `SimulinkModel` or `List<Block>`. */
+  type: string;
+}
+
+export interface UtilityMethodRequest {
+  name: string;
+  description?: string;
+  returnType: string;
+  parameters: UtilityMethodParameter[];
+  /** Java imports, e.g. `tools.vitruv.methodologisttemplate.model.simulink.*` or `java.util.Set`. */
+  imports: string[];
+  /** The Xtend method body, without the surrounding braces. */
+  body: string;
+}
+
+export interface UtilityMethodProblem {
+  utilityMethodName: string;
+  message: string;
+  /** 1-based position relative to the method body, `null` if the problem is not in the body. */
+  line: number | null;
+  column: number | null;
+  /** Only errors keep a utility method from being saved. */
+  severity: 'ERROR' | 'WARNING';
+}
+
+export interface UtilityMethodResponse {
+  id: number;
+  vsumId: number;
+  name: string;
+  description: string | null;
+  returnType: string;
+  parameters: UtilityMethodParameter[];
+  imports: string[];
+  body: string;
+  /** The utility method as it appears in the generated Xtend class. */
+  xtendDefinition: string;
+  /** The generated Java method, `null` if the utility method has problems. */
+  javaMethod: string | null;
+  problems: UtilityMethodProblem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UtilityMethodPreviewResponse {
+  xtendDefinition: string;
+  javaMethod: string | null;
+  problems: UtilityMethodProblem[];
+}
+
+export interface UtilityMethodNameAvailabilityResponse {
+  available: boolean;
+  message: string | null;
+}
+
+export interface UtilityMethodClassResponse {
+  qualifiedClassName: string;
+  fileName: string;
+  source: string;
+  problems: UtilityMethodProblem[];
+}
+
+export interface UtilityMethodTypeResponse {
+  /** Qualified metamodel package, e.g. `simulink`. */
+  metamodel: string;
+  name: string;
+  /** OCL name, e.g. `simulink::SubSystem`. */
+  qualifiedName: string;
+  kind: 'CLASS' | 'ENUM' | 'DATATYPE';
+  javaName: string;
+}
+
 // Example API methods using the authenticated service
 // Removed unused userApi and projectApi helpers
 
 // Export the class for testing or custom instances
 export { ApiService };
+
+export type {
+  BuildFailure,
+  BuildProblem,
+  BuildProblemSource,
+  VsumBuildErrorCode,
+  VsumBuildErrorResponse,
+  VsumBuildResponse,
+  VsumBuildStatus,
+} from '../types/vsumBuild';
 
 
 export type VsumRole = 'OWNER' | 'MEMBER' | 'VIEWER';

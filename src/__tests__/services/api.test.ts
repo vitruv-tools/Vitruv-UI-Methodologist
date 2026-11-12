@@ -1,18 +1,20 @@
+import type { Mock } from 'vitest';
 /**
  * Tests for ApiService.
- * All network calls are intercepted with jest.spyOn(global, 'fetch').
+ * All network calls are intercepted with vi.spyOn(global, 'fetch').
  * AuthService is mocked so tokens are provided without hitting localStorage.
  */
 
 import { apiService } from '../../services/api';
+import * as authModule from '../../services/auth';
 
 // ── mock AuthService ──────────────────────────────────────────────────────────
 
-jest.mock('../../services/auth', () => ({
+vi.mock('../../services/auth', () => ({
   AuthService: {
-    ensureValidToken: jest.fn().mockResolvedValue('mock-token'),
-    refreshToken: jest.fn().mockResolvedValue(null),
-    getFastLoginAuthorizationUrl: jest.fn().mockReturnValue('https://auth.example.com/login'),
+    ensureValidToken: vi.fn().mockResolvedValue('mock-token'),
+    refreshToken: vi.fn().mockResolvedValue(null),
+    getFastLoginAuthorizationUrl: vi.fn().mockReturnValue('https://auth.example.com/login'),
   },
 }));
 
@@ -20,7 +22,7 @@ jest.mock('../../services/auth', () => ({
 
 const mockFetch = (body: unknown, status = 200) => {
   const bodyText = typeof body === 'string' ? body : JSON.stringify(body);
-  jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+  vi.spyOn(global, 'fetch').mockResolvedValueOnce({
     ok: status >= 200 && status < 300,
     status,
     statusText: status === 200 ? 'OK' : 'Error',
@@ -31,13 +33,13 @@ const mockFetch = (body: unknown, status = 200) => {
 };
 
 const mockFetchError = (message: string) => {
-  jest.spyOn(global, 'fetch').mockRejectedValueOnce(new Error(message));
+  vi.spyOn(global, 'fetch').mockRejectedValueOnce(new Error(message));
 };
 
 // ── publicRequest ─────────────────────────────────────────────────────────────
 
 describe('ApiService – publicRequest', () => {
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => vi.restoreAllMocks());
 
   it('returns parsed JSON on 200', async () => {
     mockFetch({ data: 'hello' });
@@ -59,14 +61,14 @@ describe('ApiService – publicRequest', () => {
 // ── authenticatedRequest ──────────────────────────────────────────────────────
 
 describe('ApiService – authenticatedRequest', () => {
-  const { AuthService } = require('../../services/auth') as {
-    AuthService: { ensureValidToken: jest.Mock; refreshToken: jest.Mock };
+  const { AuthService } = (authModule as unknown) as {
+    AuthService: { ensureValidToken: Mock; refreshToken: Mock };
   };
 
   beforeEach(() => {
     AuthService.ensureValidToken.mockResolvedValue('mock-token');
   });
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => vi.restoreAllMocks());
 
   it('returns parsed JSON on 200', async () => {
     mockFetch({ data: [1, 2, 3] });
@@ -75,7 +77,7 @@ describe('ApiService – authenticatedRequest', () => {
   });
 
   it('returns null for 204 No Content', async () => {
-    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
       ok: true,
       status: 204,
       text: async () => '',
@@ -105,7 +107,7 @@ describe('ApiService – authenticatedRequest', () => {
 
   it('retries with refreshed token on 401', async () => {
     // First call → 401; refresh produces a new token; second call → 200
-    jest.spyOn(global, 'fetch')
+    vi.spyOn(global, 'fetch')
       .mockResolvedValueOnce({
         ok: false, status: 401, statusText: 'Unauthorized',
         text: async () => '{"message":"Unauthorized"}',
@@ -127,10 +129,10 @@ describe('ApiService – authenticatedRequest', () => {
 });
 
 describe('ApiService – changePassword', () => {
-  const { AuthService } = require('../../services/auth') as { AuthService: { ensureValidToken: jest.Mock } };
+  const { AuthService } = (authModule as unknown) as { AuthService: { ensureValidToken: Mock } };
 
   beforeEach(() => { AuthService.ensureValidToken.mockResolvedValue('mock-token'); });
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => vi.restoreAllMocks());
 
   it('sends the current and new passwords to the change-password endpoint', async () => {
     const payload = { data: null, message: 'Password updated' };
@@ -139,7 +141,7 @@ describe('ApiService – changePassword', () => {
     const result = await apiService.changePassword('Current1!', 'Secure1!');
 
     expect(result).toEqual(payload);
-    const [url, options] = (global.fetch as jest.Mock).mock.calls[0];
+    const [url, options] = (global.fetch as Mock).mock.calls[0];
     expect(url).toContain('/api/v1/users/change-password');
     expect(options.method).toBe('PUT');
     expect(JSON.parse(options.body)).toEqual({ currentPassword: 'Current1!', password: 'Secure1!' });
@@ -149,14 +151,14 @@ describe('ApiService – changePassword', () => {
 // ── uploadFile ────────────────────────────────────────────────────────────────
 
 describe('ApiService – uploadFile', () => {
-  const { AuthService } = require('../../services/auth') as {
-    AuthService: { ensureValidToken: jest.Mock };
+  const { AuthService } = (authModule as unknown) as {
+    AuthService: { ensureValidToken: Mock };
   };
 
   beforeEach(() => {
     AuthService.ensureValidToken.mockResolvedValue('mock-token');
   });
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => vi.restoreAllMocks());
 
   it('throws when no token is available', async () => {
     AuthService.ensureValidToken.mockResolvedValueOnce(null);
@@ -183,9 +185,9 @@ describe('ApiService – uploadFile', () => {
 // ── createMetaModel ───────────────────────────────────────────────────────────
 
 describe('ApiService – createMetaModel', () => {
-  const { AuthService } = require('../../services/auth') as { AuthService: { ensureValidToken: jest.Mock } };
+  const { AuthService } = (authModule as unknown) as { AuthService: { ensureValidToken: Mock } };
   beforeEach(() => { AuthService.ensureValidToken.mockResolvedValue('mock-token'); });
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => vi.restoreAllMocks());
 
   it('sends POST with correct body and returns response', async () => {
     const payload = { data: { id: 1 }, message: 'Created' };
@@ -200,7 +202,7 @@ describe('ApiService – createMetaModel', () => {
     });
 
     expect(result).toEqual(payload);
-    const [, options] = (global.fetch as jest.Mock).mock.calls[0];
+    const [, options] = (global.fetch as Mock).mock.calls[0];
     const body = JSON.parse(options.body);
     expect(body.name).toBe('TestModel');
     expect(body).not.toHaveProperty('applyGenModelFixes');
@@ -211,9 +213,9 @@ describe('ApiService – createMetaModel', () => {
 // ── findMetaModels ────────────────────────────────────────────────────────────
 
 describe('ApiService – findMetaModels', () => {
-  const { AuthService } = require('../../services/auth') as { AuthService: { ensureValidToken: jest.Mock } };
+  const { AuthService } = (authModule as unknown) as { AuthService: { ensureValidToken: Mock } };
   beforeEach(() => { AuthService.ensureValidToken.mockResolvedValue('mock-token'); });
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => vi.restoreAllMocks());
 
   it('calls the correct endpoint with POST and returns data array', async () => {
     const payload = { data: [{ id: 1, name: 'M1' }], message: 'OK' };
@@ -228,7 +230,7 @@ describe('ApiService – findMetaModels', () => {
     mockFetch({ data: [], message: 'OK' });
     await apiService.findMetaModels({ name: 'eco', pageNumber: 0, pageSize: 10 });
 
-    const [url, options] = (global.fetch as jest.Mock).mock.calls[0];
+    const [url, options] = (global.fetch as Mock).mock.calls[0];
     expect(url).toContain('pageNumber=0');
     expect(url).toContain('pageSize=10');
     expect(JSON.parse(options.body)).toEqual({ name: 'eco' });
@@ -244,12 +246,12 @@ describe('ApiService – findMetaModels', () => {
 // ── deleteFile ────────────────────────────────────────────────────────────────
 
 describe('ApiService – deleteFile', () => {
-  const { AuthService } = require('../../services/auth') as { AuthService: { ensureValidToken: jest.Mock } };
+  const { AuthService } = (authModule as unknown) as { AuthService: { ensureValidToken: Mock } };
   beforeEach(() => { AuthService.ensureValidToken.mockResolvedValue('mock-token'); });
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => vi.restoreAllMocks());
 
   it('resolves on 204', async () => {
-    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
       ok: true, status: 204,
       text: async () => '',
       json: async () => null,
@@ -264,17 +266,17 @@ describe('ApiService – deleteFile', () => {
   });
 });
 
-// ── downloadVsumArtifact ───────────────────────────────────────────────────────
+// ── downloadVsumProject ───────────────────────────────────────────────────────
 
-describe('ApiService – downloadVsumArtifact', () => {
-  const { AuthService } = require('../../services/auth') as {
-    AuthService: { ensureValidToken: jest.Mock; refreshToken: jest.Mock };
+describe('ApiService – downloadVsumProject', () => {
+  const { AuthService } = (authModule as unknown) as {
+    AuthService: { ensureValidToken: Mock; refreshToken: Mock };
   };
 
   const zipBytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00]);
 
   const mockZipFetch = (status = 200) => {
-    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
       ok: status >= 200 && status < 300,
       status,
       statusText: status === 200 ? 'OK' : 'Error',
@@ -290,19 +292,28 @@ describe('ApiService – downloadVsumArtifact', () => {
   beforeEach(() => {
     AuthService.ensureValidToken.mockResolvedValue('mock-token');
   });
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => vi.restoreAllMocks());
+
+  it('requests the project endpoint', async () => {
+    mockZipFetch();
+    await apiService.downloadVsumProject(42);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/v1\/vsums\/42\/project$/),
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
 
   it('returns a ZIP blob on success', async () => {
     mockZipFetch();
-    const blob = await apiService.downloadVsumArtifact(42);
+    const blob = await apiService.downloadVsumProject(42);
     expect(blob.size).toBeGreaterThan(0);
-    const header = new Uint8Array(await new Response(blob.slice(0, 2)).arrayBuffer());
+    const header = new Uint8Array(await blob.slice(0, 2).arrayBuffer());
     expect(header[0]).toBe(0x50);
     expect(header[1]).toBe(0x4b);
   });
 
   it('throws when the response body is JSON instead of a ZIP', async () => {
-    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
       ok: true,
       status: 200,
       statusText: 'OK',
@@ -314,11 +325,11 @@ describe('ApiService – downloadVsumArtifact', () => {
       blob: async () => new Blob(['{"message":"Build failed"}'], { type: 'application/json' }),
     } as unknown as Response);
 
-    await expect(apiService.downloadVsumArtifact(42)).rejects.toThrow('Build failed');
+    await expect(apiService.downloadVsumProject(42)).rejects.toThrow('Build failed');
   });
 
   it('throws on non-ok status', async () => {
-    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
       ok: false,
       status: 500,
       statusText: 'Error',
@@ -327,21 +338,150 @@ describe('ApiService – downloadVsumArtifact', () => {
       blob: async () => new Blob([]),
     } as unknown as Response);
 
-    await expect(apiService.downloadVsumArtifact(42)).rejects.toThrow('Server error');
+    await expect(apiService.downloadVsumProject(42)).rejects.toThrow('Server error');
+  });
+});
+
+// ── downloadVsumJar ───────────────────────────────────────────────────────────
+
+describe('ApiService – downloadVsumJar', () => {
+  const { AuthService } = (authModule as unknown) as {
+    AuthService: { ensureValidToken: Mock; refreshToken: Mock };
+  };
+
+  beforeEach(() => {
+    AuthService.ensureValidToken.mockResolvedValue('mock-token');
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('requests the build artifact and returns the jar', async () => {
+    const jarBytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00]);
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: {
+        get: (name: string) =>
+          name.toLowerCase() === 'content-type' ? 'application/octet-stream' : null,
+      },
+      text: async () => '',
+      blob: async () => new Blob([jarBytes], { type: 'application/octet-stream' }),
+    } as unknown as Response);
+
+    const blob = await apiService.downloadVsumJar(42);
+
+    expect(blob.size).toBe(jarBytes.length);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/v1\/vsums\/42\/build\/artifact$/),
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+});
+
+// ── structured build problems ─────────────────────────────────────────────────
+
+describe('ApiService – structured build problems', () => {
+  const { AuthService } = (authModule as unknown) as {
+    AuthService: { ensureValidToken: Mock; refreshToken: Mock };
+  };
+
+  const problem = {
+    source: 'REACTIONS',
+    file: 'my.reactions',
+    fileId: 7,
+    line: 51,
+    column: 30,
+    message: 'Couldn\'t resolve reference to EClass \'Foo\'.',
+  };
+
+  beforeEach(() => {
+    AuthService.ensureValidToken.mockResolvedValue('mock-token');
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('keeps errorCode and problems of a failed JAR export on response.data', async () => {
+    const body = {
+      message: 'The uploaded reactions do not match the uploaded metamodels',
+      errorCode: 'VSUM_REACTIONS_ERROR',
+      problems: [problem],
+    };
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: false,
+      status: 422,
+      statusText: 'Error',
+      headers: { get: () => 'application/json' },
+      text: async () => JSON.stringify(body),
+      blob: async () => new Blob([]),
+    } as unknown as Response);
+
+    const error = await apiService.downloadVsumJar(42).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe(body.message);
+    expect((error as any).response.data).toMatchObject({
+      errorCode: 'VSUM_REACTIONS_ERROR',
+      problems: [problem],
+    });
+  });
+
+  it('starts an asynchronous build', async () => {
+    mockFetch({ data: { id: 3, vsumId: 42, status: 'QUEUED' }, message: 'started' }, 202);
+
+    const result = await apiService.requestVsumBuild(42);
+
+    expect(result.data.status).toBe('QUEUED');
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/v1\/vsums\/42\/builds$/),
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('forces a new asynchronous build on request', async () => {
+    mockFetch({ data: { id: 4, vsumId: 42, status: 'QUEUED' }, message: 'started' }, 202);
+
+    await apiService.requestVsumBuild(42, true);
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/v1\/vsums\/42\/builds\?force=true$/),
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('returns errorCode and problems of a failed asynchronous build', async () => {
+    mockFetch({
+      data: {
+        id: 3,
+        vsumId: 42,
+        status: 'FAILED',
+        errorMessage: 'The uploads do not compile',
+        errorCode: 'VSUM_BUILD_FAILED',
+        problems: [problem],
+      },
+      message: null,
+    });
+
+    const result = await apiService.getVsumBuild(42, 3);
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/v1\/vsums\/42\/builds\/3$/),
+      expect.any(Object),
+    );
+    expect(result.data.errorCode).toBe('VSUM_BUILD_FAILED');
+    expect(result.data.problems).toEqual([problem]);
   });
 });
 
 // ── downloadVsumBundle ────────────────────────────────────────────────────────
 
 describe('ApiService – downloadVsumBundle', () => {
-  const { AuthService } = require('../../services/auth') as {
-    AuthService: { ensureValidToken: jest.Mock; refreshToken: jest.Mock };
+  const { AuthService } = (authModule as unknown) as {
+    AuthService: { ensureValidToken: Mock; refreshToken: Mock };
   };
 
   const zipBytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00]);
 
   const mockZipFetch = (status = 200) => {
-    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
       ok: status >= 200 && status < 300,
       status,
       statusText: status === 200 ? 'OK' : 'Error',
@@ -357,7 +497,7 @@ describe('ApiService – downloadVsumBundle', () => {
   beforeEach(() => {
     AuthService.ensureValidToken.mockResolvedValue('mock-token');
   });
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => vi.restoreAllMocks());
 
   it('requests the build/bundle endpoint and returns a ZIP blob on success', async () => {
     mockZipFetch();
@@ -368,13 +508,13 @@ describe('ApiService – downloadVsumBundle', () => {
       expect.any(Object),
     );
     expect(blob.size).toBeGreaterThan(0);
-    const header = new Uint8Array(await new Response(blob.slice(0, 2)).arrayBuffer());
+    const header = new Uint8Array(await blob.slice(0, 2).arrayBuffer());
     expect(header[0]).toBe(0x50);
     expect(header[1]).toBe(0x4b);
   });
 
   it('throws when the response body is JSON instead of a ZIP', async () => {
-    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
       ok: true,
       status: 200,
       statusText: 'OK',
@@ -390,7 +530,7 @@ describe('ApiService – downloadVsumBundle', () => {
   });
 
   it('throws on non-ok status', async () => {
-    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
       ok: false,
       status: 500,
       statusText: 'Error',
@@ -406,13 +546,13 @@ describe('ApiService – downloadVsumBundle', () => {
 // ── deleteVsumPermanently ─────────────────────────────────────────────────────
 
 describe('ApiService – deleteVsumPermanently', () => {
-  const { AuthService } = require('../../services/auth') as { AuthService: { ensureValidToken: jest.Mock } };
+  const { AuthService } = (authModule as unknown) as { AuthService: { ensureValidToken: Mock } };
   beforeEach(() => { AuthService.ensureValidToken.mockResolvedValue('mock-token'); });
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => vi.restoreAllMocks());
 
   it('calls DELETE /api/v1/vsums/{id}/permanent', async () => {
     mockFetch({ message: 'Vsum permanently deleted' });
-    const fetchSpy = jest.spyOn(global, 'fetch');
+    const fetchSpy = vi.spyOn(global, 'fetch');
 
     await apiService.deleteVsumPermanently(42);
 
@@ -430,13 +570,13 @@ describe('ApiService – deleteVsumPermanently', () => {
 // ── updateUserName ────────────────────────────────────────────────────────────
 
 describe('ApiService – updateUserName', () => {
-  const { AuthService } = require('../../services/auth') as { AuthService: { ensureValidToken: jest.Mock } };
+  const { AuthService } = (authModule as unknown) as { AuthService: { ensureValidToken: Mock } };
   beforeEach(() => { AuthService.ensureValidToken.mockResolvedValue('mock-token'); });
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => vi.restoreAllMocks());
 
   it('calls PUT /api/v1/users/{id} with firstName and lastName in body', async () => {
     mockFetch({ message: 'User updated successfully' });
-    const fetchSpy = jest.spyOn(global, 'fetch');
+    const fetchSpy = vi.spyOn(global, 'fetch');
 
     await apiService.updateUserName('42', 'Max', 'Oesterle');
 
@@ -459,9 +599,9 @@ describe('ApiService – updateUserName', () => {
 });
 
 describe('ApiService – getLowCodeReactionsMetadata', () => {
-  const { AuthService } = require('../../services/auth') as { AuthService: { ensureValidToken: jest.Mock } };
+  const { AuthService } = (authModule as unknown) as { AuthService: { ensureValidToken: Mock } };
   beforeEach(() => { AuthService.ensureValidToken.mockResolvedValue('mock-token'); });
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => vi.restoreAllMocks());
 
   it('GETs /api/lowcode-metadata', async () => {
     const payload = {
@@ -480,7 +620,7 @@ describe('ApiService – getLowCodeReactionsMetadata', () => {
 
     const result = await apiService.getLowCodeReactionsMetadata();
     expect(result).toEqual(payload);
-    const [url, options] = (global.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
+    const [url, options] = (global.fetch as Mock).mock.calls[0] as [string, RequestInit];
     expect(url).toContain('/api/lowcode-metadata');
     expect(options.method ?? 'GET').toBe('GET');
   });

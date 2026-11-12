@@ -1,17 +1,18 @@
+import type { Mocked } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useTokenRefresh } from '../../hooks/useTokenRefresh';
 import { AuthService, AuthResponse } from '../../services/auth';
 
 // Mock AuthService
-jest.mock('../../services/auth', () => ({
+vi.mock('../../services/auth', () => ({
     AuthService: {
-        isAuthenticated: jest.fn(),
-        refreshToken: jest.fn(),
-        ensureValidToken: jest.fn(),
+        isAuthenticated: vi.fn(),
+        refreshToken: vi.fn(),
+        ensureValidToken: vi.fn(),
     },
 }));
 
-const mockAuthService = AuthService as jest.Mocked<typeof AuthService>;
+const mockAuthService = AuthService as Mocked<typeof AuthService>;
 
 const mockAuthResponse: AuthResponse = {
     access_token: 'new-access-token',
@@ -33,13 +34,13 @@ const setTokenExpiry = (msFromNow: number) => {
 describe('useTokenRefresh', () => {
 
     beforeEach(() => {
-        jest.useFakeTimers();
+        vi.useFakeTimers();
         localStorage.clear();
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     afterEach(() => {
-        jest.useRealTimers();
+        vi.useRealTimers();
     });
 
     describe('setup', () => {
@@ -97,7 +98,7 @@ describe('useTokenRefresh', () => {
             setTokenExpiry(FIVE_MINUTES - 1000);
 
             act(() => {
-                jest.advanceTimersByTime(60 * 1000);
+                vi.advanceTimersByTime(60 * 1000);
             });
 
             await waitFor(() => {
@@ -113,7 +114,7 @@ describe('useTokenRefresh', () => {
             renderHook(() => useTokenRefresh());
 
             act(() => {
-                jest.advanceTimersByTime(60 * 1000);
+                vi.advanceTimersByTime(60 * 1000);
             });
 
             expect(mockAuthService.refreshToken).not.toHaveBeenCalled();
@@ -124,12 +125,12 @@ describe('useTokenRefresh', () => {
             mockAuthService.refreshToken.mockRejectedValue(new Error('Refresh failed'));
             setTokenExpiry(FIVE_MINUTES - 1000); // about to expire
 
-            const clearIntervalSpy = jest.spyOn(global, 'clearInterval');
+            const clearIntervalSpy = vi.spyOn(global, 'clearInterval');
 
             renderHook(() => useTokenRefresh());
 
             act(() => {
-                jest.advanceTimersByTime(60 * 1000);
+                vi.advanceTimersByTime(60 * 1000);
             });
 
             await waitFor(() => {
@@ -144,7 +145,7 @@ describe('useTokenRefresh', () => {
             mockAuthService.refreshToken.mockResolvedValue(mockAuthResponse);
             setTokenExpiry(FIVE_MINUTES + 10000);
 
-            const clearIntervalSpy = jest.spyOn(global, 'clearInterval');
+            const clearIntervalSpy = vi.spyOn(global, 'clearInterval');
             const { unmount } = renderHook(() => useTokenRefresh());
 
             unmount();

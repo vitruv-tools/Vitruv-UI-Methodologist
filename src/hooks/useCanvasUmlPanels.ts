@@ -26,8 +26,14 @@ interface UseCanvasUmlPanelsOptions {
   getCanvasNodes: () => Node[];
   fetchEcoreFile: (fileId: number) => Promise<string>;
   updateEcoreFileData?: UpdateEcoreFileData;
-  /** Stores edited ecore in the project's copy; `libraryMetaModelId` is the meta model's `sourceId`. */
-  persistProjectEcore: (libraryMetaModelId: number, ecoreContent: string) => Promise<void>;
+  /**
+   * Stores edited ecore in the project's copy; `libraryMetaModelId` is the meta model's `sourceId`.
+   * Resolves with the copy's file id when saving gave it a new one.
+   */
+  persistProjectEcore: (
+    libraryMetaModelId: number,
+    ecoreContent: string,
+  ) => Promise<{ ecoreFileId?: number } | undefined>;
   onLoadError: (message: CanvasUmlPanelLoadErrorMessage) => void;
 }
 
@@ -52,9 +58,12 @@ function updatePanelEcoreContent(
   panels: CanvasUmlPanelState[],
   panelId: string,
   content: string,
+  ecoreFileId?: number,
 ): CanvasUmlPanelState[] {
   return panels.map(panel => (
-    panel.id === panelId ? { ...panel, ecoreContent: content } : panel
+    panel.id === panelId
+      ? { ...panel, ecoreContent: content, ...(ecoreFileId == null ? {} : { ecoreFileId }) }
+      : panel
   ));
 }
 
@@ -144,12 +153,13 @@ export function useCanvasUmlPanels({
   const handleUmlPanelSaved = useCallback((
     panelId: string,
     fileName: string,
-    result: { ecoreContent: string },
+    result: { ecoreContent: string; ecoreFileId?: number },
   ) => {
+    // The project's copy can get a new file id on save; reload and downloads must follow it.
     setUmlPanels(previousPanels => (
-      updatePanelEcoreContent(previousPanels, panelId, result.ecoreContent)
+      updatePanelEcoreContent(previousPanels, panelId, result.ecoreContent, result.ecoreFileId)
     ));
-    updateEcoreFileData?.(fileName, result.ecoreContent);
+    updateEcoreFileData?.(fileName, result.ecoreContent, result.ecoreFileId);
   }, [updateEcoreFileData]);
 
   const handleUmlPanelEcoreContentUpdated = useCallback((

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { CodeEditorModal } from './CodeEditorModal';
 import { CodeEditorState } from './flowCanvasTypes';
+import { ensureUtilityImport } from '../../utils/reactionImports';
 
 export type ReactionEditorState = CodeEditorState;
 
@@ -13,7 +14,10 @@ interface ReactionEditorModalProps {
   readonly readOnly?: boolean;
 }
 
-/** Shared Reaction Editor shell — Monaco + LSP for `.reactions` files. */
+/**
+ * Shared Reaction Editor shell — Monaco + LSP for `.reactions` files. Reactions that do not import
+ * the project's utility class get the import added, as an unsaved change.
+ */
 export const ReactionEditorModal: React.FC<ReactionEditorModalProps> = ({
   state,
   onClose,
@@ -22,6 +26,12 @@ export const ReactionEditorModal: React.FC<ReactionEditorModalProps> = ({
   vsumId,
   readOnly,
 }) => {
+  const initialCode = state?.initialCode;
+  const initialDraft = useMemo(
+    () => (readOnly || initialCode === undefined ? undefined : ensureUtilityImport(initialCode)),
+    [initialCode, readOnly],
+  );
+
   if (!state) return null;
 
   return (
@@ -31,6 +41,7 @@ export const ReactionEditorModal: React.FC<ReactionEditorModalProps> = ({
       onSave={onSave}
       onDelete={onDelete}
       initialCode={state.initialCode}
+      initialDraft={initialDraft}
       edgeId={state.edgeId || ''}
       sourceFileName={state.sourceFileName}
       targetFileName={state.targetFileName}
@@ -40,6 +51,7 @@ export const ReactionEditorModal: React.FC<ReactionEditorModalProps> = ({
       fileExtension=".reactions"
       title="Reaction Editor"
       readOnly={readOnly}
+      initialPosition={state.initialPosition}
     />
   );
 };

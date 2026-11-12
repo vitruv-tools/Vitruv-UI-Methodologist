@@ -384,7 +384,7 @@ describe('confirmDeleteFineGranularReaction', () => {
   };
 
   it('returns false when nothing is selected', () => {
-    expect(confirmDeleteFineGranularReaction(null, [], jest.fn())).toBe(false);
+    expect(confirmDeleteFineGranularReaction(null, [], vi.fn())).toBe(false);
   });
 
   it('removes the fine edge and an empty parent coarse reaction', () => {
@@ -465,6 +465,15 @@ describe('ghostPositionChanges', () => {
     // right of A (x=200) and left of B (x=200), on the full-box chord (height 36)
     expect(changes[0].position.x).toBe(194);
     expect(changes[0].position.y).toBe(12);
+  });
+
+  it('finds ghosts whose ids carry the model instance key', () => {
+    const keyedGhost: Node = { ...ghost, id: 'ghost-ecore-7-http://m#A.ref' };
+    const keyedEdge: Edge = { ...umlEdge, id: 'uml-ref-ecore-7-http://m#A.ref' };
+    const changes = ghostPositionChanges([source, target, keyedGhost], [keyedEdge]);
+    expect(changes).toHaveLength(1);
+    expect(changes[0].id).toBe('ghost-ecore-7-http://m#A.ref');
+    expect(changes[0].position.x).toBe(194);
   });
 
   it('returns nothing when the ghost is already on the midpoint', () => {

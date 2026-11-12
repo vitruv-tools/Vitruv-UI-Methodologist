@@ -1,17 +1,18 @@
+import type { Mock } from 'vitest';
 import { apiService } from '../../services/api';
 import { syncVsumWorkspaceChanges } from '../../utils/vsumSyncSave';
 
-jest.mock('../../services/api', () => ({
+vi.mock('../../services/api', () => ({
   apiService: {
-    syncVsumChanges: jest.fn(),
+    syncVsumChanges: vi.fn(),
   },
 }));
 
 describe('syncVsumWorkspaceChanges', () => {
-  afterEach(() => jest.clearAllMocks());
+  afterEach(() => vi.clearAllMocks());
 
   it('returns success message on first successful save', async () => {
-    (apiService.syncVsumChanges as jest.Mock).mockResolvedValueOnce({
+    (apiService.syncVsumChanges as Mock).mockResolvedValueOnce({
       message: 'VSUM successfully updated',
     });
 
@@ -25,7 +26,7 @@ describe('syncVsumWorkspaceChanges', () => {
   });
 
   it('retries with reactionFileId null when reaction files are missing', async () => {
-    (apiService.syncVsumChanges as jest.Mock)
+    (apiService.syncVsumChanges as Mock)
       .mockRejectedValueOnce({
         response: { data: { message: 'Reaction files not found for relation' } },
       })
@@ -46,7 +47,7 @@ describe('syncVsumWorkspaceChanges', () => {
   });
 
   it('retries a 404 by unlinking only the coarse reaction file id', async () => {
-    (apiService.syncVsumChanges as jest.Mock)
+    (apiService.syncVsumChanges as Mock)
       .mockRejectedValueOnce(Object.assign(new Error('Not Found'), { status: 404 }))
       .mockResolvedValueOnce({ message: 'VSUM successfully updated' });
 
@@ -101,7 +102,7 @@ describe('syncVsumWorkspaceChanges', () => {
   });
 
   it('does not retry a 404 when only a generated Low Code file id is present', async () => {
-    (apiService.syncVsumChanges as jest.Mock).mockRejectedValueOnce(
+    (apiService.syncVsumChanges as Mock).mockRejectedValueOnce(
       Object.assign(new Error('Not Found'), { status: 404 }),
     );
 
@@ -129,7 +130,7 @@ describe('syncVsumWorkspaceChanges', () => {
   });
 
   it('does not retry a 404 when no reaction file ids were sent', async () => {
-    (apiService.syncVsumChanges as jest.Mock).mockRejectedValueOnce(
+    (apiService.syncVsumChanges as Mock).mockRejectedValueOnce(
       Object.assign(new Error('Not Found'), { status: 404 }),
     );
 

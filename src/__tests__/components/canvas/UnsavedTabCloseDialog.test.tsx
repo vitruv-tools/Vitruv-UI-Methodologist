@@ -2,19 +2,23 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { UnsavedTabCloseDialog } from '../../../components/canvas/UnsavedTabCloseDialog';
 
-jest.mock('react-dom', () => ({
-  ...jest.requireActual('react-dom'),
-  createPortal: (node: React.ReactNode) => node,
-}));
+vi.mock('react-dom', async () => {
+  const actual = await vi.importActual<any>('react-dom');
+  const mocked = {
+    ...actual,
+    createPortal: (node: React.ReactNode) => node,
+  };
+  return { ...mocked, default: mocked };
+});
 
 describe('UnsavedTabCloseDialog', () => {
   it('returns null when closed', () => {
     const { container } = render(
       <UnsavedTabCloseDialog
         isOpen={false}
-        onSave={jest.fn()}
-        onCloseWithoutSaving={jest.fn()}
-        onCancel={jest.fn()}
+        onSave={vi.fn()}
+        onCloseWithoutSaving={vi.fn()}
+        onCancel={vi.fn()}
       />,
     );
     expect(container.firstChild).toBeNull();
@@ -25,18 +29,18 @@ describe('UnsavedTabCloseDialog', () => {
       <UnsavedTabCloseDialog
         isOpen
         projectName="My Project"
-        onSave={jest.fn()}
-        onCloseWithoutSaving={jest.fn()}
-        onCancel={jest.fn()}
+        onSave={vi.fn()}
+        onCloseWithoutSaving={vi.fn()}
+        onCancel={vi.fn()}
       />,
     );
     expect(screen.getByText(/"My Project" has unsaved changes/i)).toBeInTheDocument();
   });
 
   it('invokes callbacks for save, discard, and cancel', () => {
-    const onSave = jest.fn();
-    const onCloseWithoutSaving = jest.fn();
-    const onCancel = jest.fn();
+    const onSave = vi.fn();
+    const onCloseWithoutSaving = vi.fn();
+    const onCancel = vi.fn();
     render(
       <UnsavedTabCloseDialog
         isOpen

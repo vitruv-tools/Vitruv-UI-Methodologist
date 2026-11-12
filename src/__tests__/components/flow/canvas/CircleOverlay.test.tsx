@@ -7,7 +7,7 @@ import { Node } from 'reactflow';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
-jest.mock('../../../../components/flow/canvas/ViewTypeBubble', () => ({
+vi.mock('../../../../components/flow/canvas/ViewTypeBubble', () => ({
     OUTER_R: 28,
     ViewTypeBubble: ({ id, label, cx, cy, onClick, onDrag }: any) => (
         <g data-testid={`bubble-${id}`}>
@@ -24,7 +24,7 @@ jest.mock('../../../../components/flow/canvas/ViewTypeBubble', () => ({
     ),
 }));
 
-jest.mock('../../../../components/flow/canvas/ViewTypeContextMenu', () => ({
+vi.mock('../../../../components/flow/canvas/ViewTypeContextMenu', () => ({
     ViewTypeContextMenu: ({ onAdd, onClose }: any) => (
         <div data-testid="context-menu">
             <button
@@ -40,7 +40,7 @@ jest.mock('../../../../components/flow/canvas/ViewTypeContextMenu', () => ({
     ),
 }));
 
-jest.mock('../../../../components/flow/canvas/ViewTypeDeletionMenu', () => ({
+vi.mock('../../../../components/flow/canvas/ViewTypeDeletionMenu', () => ({
     ViewTypeDeletionMenu: ({ label, onDelete, onClose }: any) => (
         <div data-testid="deletion-menu">
             <span data-testid="deletion-menu-label">{label}</span>
@@ -54,7 +54,7 @@ jest.mock('../../../../components/flow/canvas/ViewTypeDeletionMenu', () => ({
     ),
 }));
 
-jest.mock('../../../../components/flow/canvas/ViewTypeArrow', () => ({
+vi.mock('../../../../components/flow/canvas/ViewTypeArrow', () => ({
     ViewTypeArrow: ({ id, onDelete }: any) => (
         <line data-testid={`arrow-${id}`} onClick={onDelete} />
     ),
@@ -106,23 +106,23 @@ const defaultProps = () => ({
     circle: makeCircle(),
     viewport: makeViewport(),
     selected: false,
-    onSelect: jest.fn(),
-    onResize: jest.fn(),
-    onResizePreview: jest.fn(),
-    onResizeEnd: jest.fn(),
+    onSelect: vi.fn(),
+    onResize: vi.fn(),
+    onResizePreview: vi.fn(),
+    onResizeEnd: vi.fn(),
     containerRef: makeContainerRef(),
     viewTypes: [],
     ecoreNodes: [],
-    onAddViewType: jest.fn(),
-    onDeleteViewType: jest.fn(),
-    onUpdateViewTypeAngle: jest.fn(),
-    onUnlinkNode: jest.fn(),
+    onAddViewType: vi.fn(),
+    onDeleteViewType: vi.fn(),
+    onUpdateViewTypeAngle: vi.fn(),
+    onUnlinkNode: vi.fn(),
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('CircleOverlay', () => {
-    beforeEach(() => jest.clearAllMocks());
+    beforeEach(() => vi.clearAllMocks());
 
     // Rendering
 
@@ -231,7 +231,7 @@ describe('CircleOverlay', () => {
     });
 
     it('calls onAddViewType with the clicked add-point angle when context menu adds a view type', () => {
-        const onAddViewType = jest.fn();
+        const onAddViewType = vi.fn();
         const { container } = render(
             <CircleOverlay {...defaultProps()} onAddViewType={onAddViewType} />
         );
@@ -260,7 +260,7 @@ describe('CircleOverlay', () => {
     });
 
     it('calls onDeleteViewType when deletion is confirmed', () => {
-        const onDeleteViewType = jest.fn();
+        const onDeleteViewType = vi.fn();
         const props = {
             ...defaultProps(),
             viewTypes: [makeViewType()],
@@ -286,7 +286,7 @@ describe('CircleOverlay', () => {
     // Selection
 
     it('calls onSelect when circle hitbox is clicked', () => {
-        const onSelect = jest.fn();
+        const onSelect = vi.fn();
         const { container } = render(
             <CircleOverlay {...defaultProps()} onSelect={onSelect} />
         );
@@ -298,7 +298,7 @@ describe('CircleOverlay', () => {
     // Arrow deletion
 
     it('calls onDeleteViewType when an arrow is clicked', () => {
-        const onDeleteViewType = jest.fn();
+        const onDeleteViewType = vi.fn();
         const props = {
             ...defaultProps(),
             viewTypes: [makeViewType({ linkedNodeIds: ['node-1'] })],
@@ -313,7 +313,7 @@ describe('CircleOverlay', () => {
     // Angle computation
 
     it('offers an add-point at -π/2 (top) when no existing viewTypes, and spawns the VT there', () => {
-        const onAddViewType = jest.fn();
+        const onAddViewType = vi.fn();
         const { container } = render(
             <CircleOverlay {...defaultProps()} onAddViewType={onAddViewType} viewTypes={[]} />
         );
@@ -326,7 +326,7 @@ describe('CircleOverlay', () => {
     });
 
     it('relocates the top add-point into the largest gap once the top slot is occupied', () => {
-        const onAddViewType = jest.fn();
+        const onAddViewType = vi.fn();
         const props = {
             ...defaultProps(),
             viewTypes: [makeViewType({ angle: -Math.PI / 2 })], // top is now occupied

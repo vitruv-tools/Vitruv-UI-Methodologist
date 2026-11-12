@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import {
@@ -7,9 +8,9 @@ import {
 import { AuthService } from '../../../services/auth';
 import { USER_PROFILE_LABEL } from '../../../constants/accountLabels';
 
-const mockRefreshCurrentUser = jest.fn().mockResolvedValue(null);
+const mockRefreshCurrentUser = vi.fn().mockResolvedValue(null);
 
-jest.mock('../../../contexts/AuthContext', () => ({
+vi.mock('../../../contexts/AuthContext', () => ({
   useAuth: () => ({
     user: {
       id: 'user-1',
@@ -22,13 +23,13 @@ jest.mock('../../../contexts/AuthContext', () => ({
   }),
 }));
 
-jest.mock('../../../services/auth', () => ({
+vi.mock('../../../services/auth', () => ({
   AuthService: {
-    signOut: jest.fn(),
+    signOut: vi.fn(),
   },
 }));
 
-jest.mock('../../../components/ui/ProfileModal', () => ({
+vi.mock('../../../components/ui/ProfileModal', () => ({
   ProfileModal: ({
     onClose,
     onNameSaved,
@@ -52,7 +53,7 @@ const account: CanvasAccountDisplay = {
 
 const renderAccountMenu = () => {
   const dismissalBoundaryRef = React.createRef<HTMLDivElement>();
-  const onCloseSiblingMenu = jest.fn();
+  const onCloseSiblingMenu = vi.fn();
   const view = render(
     <div ref={dismissalBoundaryRef}>
       <CanvasAccountMenu
@@ -68,8 +69,8 @@ const renderAccountMenu = () => {
 };
 
 beforeEach(() => {
-  jest.clearAllMocks();
-  (AuthService.signOut as jest.Mock).mockReturnValue(new Promise<void>(() => undefined));
+  vi.clearAllMocks();
+  (AuthService.signOut as Mock).mockReturnValue(new Promise<void>(() => undefined));
 });
 
 describe('CanvasAccountMenu', () => {

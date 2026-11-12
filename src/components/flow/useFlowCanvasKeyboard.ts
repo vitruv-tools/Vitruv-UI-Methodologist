@@ -12,6 +12,8 @@ interface KeyboardShortcutOptions {
   undo: () => void;
   redo: () => void;
   setPendingDelete: (value: { nodeIds: string[]; edgeIds: string[]; fileId: string | null }) => void;
+  /** Escape on the canvas, e.g. to clear the selection. Not called while the UML view is open. */
+  onEscape?: () => void;
 }
 
 function isEditableElement(target: HTMLElement): boolean {
@@ -60,6 +62,7 @@ export function useFlowCanvasKeyboardShortcuts(options: KeyboardShortcutOptions)
     undo,
     redo,
     setPendingDelete,
+    onEscape,
   } = options;
 
   useEffect(() => {
@@ -92,6 +95,11 @@ export function useFlowCanvasKeyboardShortcuts(options: KeyboardShortcutOptions)
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isEditableElement(event.target as HTMLElement)) return;
 
+      if (event.key === 'Escape') {
+        if (!umlModalOpen) onEscape?.();
+        return;
+      }
+
       const isDeleteKey = event.key === 'Delete' || event.key === 'Backspace';
       if (isDeleteKey && handleDeleteKey(event)) return;
 
@@ -101,5 +109,5 @@ export function useFlowCanvasKeyboardShortcuts(options: KeyboardShortcutOptions)
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [undo, redo, canUndo, canRedo, nodes, edges, selectedFileId, setPendingDelete, umlModalOpen, readOnly]);
+  }, [undo, redo, canUndo, canRedo, nodes, edges, selectedFileId, setPendingDelete, umlModalOpen, readOnly, onEscape]);
 }

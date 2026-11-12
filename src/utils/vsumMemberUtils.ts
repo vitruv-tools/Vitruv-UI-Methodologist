@@ -192,6 +192,20 @@ export function pickMostRestrictiveRole(
   return null;
 }
 
+/**
+ * Like pickMostRestrictiveRole, plus a role inferred from a shared-by contact.
+ * Sharing only rules out OWNER: the caller can still be a MEMBER, so a known
+ * MEMBER or VIEWER role wins and the inferred role (VIEWER) is the fallback.
+ */
+export function pickSharedAwareRole(
+  inferredSharedRole: VsumRole | null,
+  ...knownRoles: Array<VsumRole | null | undefined>
+): VsumRole | null {
+  const known = pickMostRestrictiveRole(...knownRoles);
+  if (!inferredSharedRole) return known;
+  return known === 'MEMBER' || known === 'VIEWER' ? known : inferredSharedRole;
+}
+
 /** Effective access role for a project (stored access + optional API role). */
 export function resolveProjectAccessRole(
   projectId: number,
@@ -200,7 +214,7 @@ export function resolveProjectAccessRole(
   const stored = readStoredProjectAccess(projectId);
   const storedRole = resolveVsumAccessRole(stored?.accessRole);
   const inferredViewer: VsumRole | null = stored?.sharedBy ? 'VIEWER' : null;
-  const role = pickMostRestrictiveRole(storedRole, inferredViewer, apiRole ?? null);
+  const role = pickSharedAwareRole(inferredViewer, storedRole, apiRole ?? null);
   if (role) return role;
   if (stored?.sharedBy) return 'VIEWER';
   return 'OWNER';

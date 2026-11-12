@@ -1,31 +1,32 @@
+import type { Mock, MockInstance } from 'vitest';
 import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SignIn } from '../../../components/auth/SignIn';
 
-const { apiService } = jest.requireMock('../../../services/api') as {
-  apiService: { forgotPassword: jest.Mock };
+const { apiService } = (apiModule as unknown) as {
+  apiService: { forgotPassword: Mock };
 };
 
-jest.mock('../../../contexts/AuthContext', () => ({
+vi.mock('../../../contexts/AuthContext', () => ({
   useAuth: () => ({
     signIn: mockSignIn,
   }),
 }));
 
-jest.mock('../../../services/api', () => ({
+vi.mock('../../../services/api', () => ({
   apiService: {
-    forgotPassword: jest.fn(),
+    forgotPassword: vi.fn(),
   },
 }));
 
-const mockSignIn = jest.fn();
-const mockOnSignInSuccess = jest.fn();
-const mockOnSwitchToSignUp = jest.fn();
+const mockSignIn = vi.fn();
+const mockOnSignInSuccess = vi.fn();
+const mockOnSwitchToSignUp = vi.fn();
 
 describe('SignIn component', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('renders username, password fields and sign in button', () => {
@@ -121,8 +122,8 @@ describe('SignIn component', () => {
   });
 
   it('opens forgot password modal and validates email', async () => {
-    const { apiService } = jest.requireMock('../../../services/api') as {
-      apiService: { forgotPassword: jest.Mock };
+    const { apiService } = (apiModule as unknown) as {
+      apiService: { forgotPassword: Mock };
     };
 
     render(
@@ -167,7 +168,7 @@ describe('SignIn component', () => {
 
 describe('SignIn – forgot password dialog', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   const forgotPasswordDialogTitle = () =>
@@ -298,14 +299,15 @@ describe('SignIn – forgot password dialog', () => {
 // ── Fast Login button ─────────────────────────────────────────────────────────
 
 import { AuthService } from '../../../services/auth';
+import * as apiModule from '../../../services/api';
 
 describe('SignIn – Fast Login button', () => {
   // JSDOM marks location.assign as read-only; replace globalThis.location with
   // a plain object so we can intercept the redirect call.
-  const assignMock = jest.fn();
+  const assignMock = vi.fn();
   const originalLocation = globalThis.location;
 
-  let fastLoginSpy: jest.SpyInstance;
+  let fastLoginSpy: MockInstance;
 
   beforeAll(() => {
     // @ts-ignore — intentional JSDOM workaround
@@ -318,9 +320,9 @@ describe('SignIn – Fast Login button', () => {
   });
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     assignMock.mockReset();
-    fastLoginSpy = jest
+    fastLoginSpy = vi
       .spyOn(AuthService, 'getFastLoginAuthorizationUrl')
       .mockReturnValue('https://keycloak.example.com/auth?code');
   });

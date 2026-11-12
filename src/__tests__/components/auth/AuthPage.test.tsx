@@ -2,9 +2,9 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-const mockAuthPage = jest.fn(() => <div>AuthPage mock</div>);
+const mockAuthPage = vi.fn(() => <div>AuthPage mock</div>);
 
-jest.mock('../../../components/auth/AuthPage', () => ({
+vi.mock('../../../components/auth/AuthPage', () => ({
   __esModule: true,
   AuthPage: (props: any) => mockAuthPage(props),
 }));

@@ -1,10 +1,12 @@
+import type { Mock } from 'vitest';
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { VsumUsersTab } from '../../../components/ui/VsumUsersTab';
+import * as apiModule from '../../../services/api';
 
-jest.mock('../../../services/api', () => ({
+vi.mock('../../../services/api', () => ({
   apiService: {
-    getVsumMembers: jest.fn().mockResolvedValue({
+    getVsumMembers: vi.fn().mockResolvedValue({
       data: [
         {
           id: 1,
@@ -15,7 +17,7 @@ jest.mock('../../../services/api', () => ({
         },
       ],
     }),
-    searchUsers: jest.fn().mockResolvedValue({
+    searchUsers: vi.fn().mockResolvedValue({
       data: [
         {
           id: 2,
@@ -25,30 +27,30 @@ jest.mock('../../../services/api', () => ({
         },
       ],
     }),
-    addVsumMember: jest.fn().mockResolvedValue({}),
-    removeVsumMember: jest.fn().mockResolvedValue({}),
-    inviteVsumViewer: jest.fn().mockResolvedValue({ message: 'Invitation sent' }),
+    addVsumMember: vi.fn().mockResolvedValue({}),
+    removeVsumMember: vi.fn().mockResolvedValue({}),
+    inviteVsumViewer: vi.fn().mockResolvedValue({ message: 'Invitation sent' }),
   },
 }));
 
-const { apiService } = require('../../../services/api') as {
+const { apiService } = (apiModule as unknown) as {
   apiService: {
-    getVsumMembers: jest.Mock;
-    searchUsers: jest.Mock;
-    addVsumMember: jest.Mock;
-    removeVsumMember: jest.Mock;
-    inviteVsumViewer: jest.Mock;
+    getVsumMembers: Mock;
+    searchUsers: Mock;
+    addVsumMember: Mock;
+    removeVsumMember: Mock;
+    inviteVsumViewer: Mock;
   };
 };
 
 describe('VsumUsersTab', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    jest.spyOn(globalThis, 'confirm').mockReturnValue(true);
+    vi.clearAllMocks();
+    vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
   });
 
   afterEach(() => {
-    (globalThis.confirm as jest.Mock).mockRestore();
+    (globalThis.confirm as Mock).mockRestore();
   });
 
   it('loads and displays members', async () => {
@@ -60,29 +62,38 @@ describe('VsumUsersTab', () => {
   });
 
   it('searches and adds a new member', async () => {
-    render(<VsumUsersTab vsumId={1} />);
+    apiService.getVsumMembers.mockResolvedValue({ data: [] });
+    apiService.searchUsers.mockResolvedValue({
+      data: [{ id: 2, firstName: 'Bob', lastName: 'Member', email: 'bob@example.com' }],
+    });
+    apiService.addVsumMember.mockResolvedValue({});
+    const onChanged = vi.fn();
+    render(<VsumUsersTab vsumId={1} onChanged={onChanged} />);
 
-    const input = screen.getByPlaceholderText(/Search user by name or email/i);
-    fireEvent.change(input, { target: { value: 'bob' } });
+    fireEvent.change(screen.getByLabelText('Add as'), { target: { value: 'MEMBER' } });
+    fireEvent.change(screen.getByPlaceholderText('Name or email…'), { target: { value: 'bob' } });
+    fireEvent.click(await screen.findByRole('option', { name: /Bob Member/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add member' }));
 
     await waitFor(() => {
-      expect(apiService.searchUsers).toHaveBeenCalled();
+      expect(apiService.addVsumMember).toHaveBeenCalledWith(1, { userId: 2 });
+      expect(onChanged).toHaveBeenCalled();
     });
-    // we only assert that search was triggered; UI list rendering is implementation-detail heavy
+    expect(await screen.findByText('Bob Member was added as a member.')).toBeInTheDocument();
   });
 });
 
 
 describe('VsumUsersTab – additional tests', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    jest.spyOn(globalThis, 'confirm').mockReturnValue(true);
+    vi.clearAllMocks();
+    vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
     apiService.getVsumMembers.mockResolvedValue({ data: [] });
     apiService.searchUsers.mockResolvedValue({ data: [] });
   });
 
   afterEach(() => {
-    (globalThis.confirm as jest.Mock).mockRestore();
+    (globalThis.confirm as Mock).mockRestore();
   });
 
   it('shows "No members yet." when list is empty', async () => {
@@ -97,7 +108,7 @@ describe('VsumUsersTab – additional tests', () => {
     render(<VsumUsersTab vsumId={1} />);
     expect(await screen.findByText('Carol Dev')).toBeInTheDocument();
     expect(screen.getByText('carol@example.com')).toBeInTheDocument();
-    expect(screen.getByText('Member')).toBeInTheDocument();
+    expect(within(screen.getByRole('table')).getByText('Member')).toBeInTheDocument();
   });
 
   it('does not show Remove button for OWNER role', async () => {
@@ -136,6 +147,7 @@ describe('VsumUsersTab – additional tests', () => {
   it('Add member button is disabled when no user is selected', async () => {
     render(<VsumUsersTab vsumId={1} />);
     await screen.findByText(/No members yet/i);
+    fireEvent.change(screen.getByLabelText('Add as'), { target: { value: 'MEMBER' } });
     expect(screen.getByRole('button', { name: /Add member/i })).toBeDisabled();
   });
 
@@ -176,7 +188,7 @@ describe('VsumUsersTab – additional tests', () => {
     render(<VsumUsersTab vsumId={1} />);
     expect(await screen.findByText('Pending invite')).toBeInTheDocument();
     expect(screen.getByText('Pending')).toBeInTheDocument();
-    expect(screen.getByText('Viewer')).toBeInTheDocument();
+    expect(within(screen.getByRole('table')).getByText('Viewer')).toBeInTheDocument();
   });
 
   it('hides invite and add controls when canManage is false', async () => {

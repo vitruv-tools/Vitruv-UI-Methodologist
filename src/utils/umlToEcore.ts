@@ -3,6 +3,9 @@ import {
   normalizeAttributeTypeDisplay,
   normalizeOperationReturnType,
   ECORE_DOCUMENTATION_ANNOTATION,
+  UML_MULTIPLICITY_ANNOTATION,
+  UML_MULTIPLICITY_SOURCE_KEY,
+  UML_MULTIPLICITY_TARGET_KEY,
   UML_VISIBILITY_ANNOTATION,
   UMLAttribute,
   UMLClass,
@@ -12,7 +15,12 @@ import {
   UMLVisibility,
 } from './ecoreToUml';
 import { ECORE_XML_NAMESPACE, XSI_XML_NAMESPACE } from './ecoreXmlNamespaces';
-import { parseMultiplicity } from './umlMultiplicity';
+import {
+  formatMultiplicity,
+  impliedSourceMultiplicity,
+  normalizeMultiplicityDisplay,
+  parseMultiplicity,
+} from './umlMultiplicity';
 
 const ECORE_NS = ECORE_XML_NAMESPACE;
 const XSI_NS = XSI_XML_NAMESPACE;
@@ -140,20 +148,54 @@ function renderOperation(op: UMLOperation): string {
   return `${openTag}>\n${annotations}\n    </eOperations>`;
 }
 
+/**
+ * Ecore only stores the target bounds. The source end, and a target spelled differently from its
+ * bounds (`*`), go into an annotation so they survive saving and reloading.
+ */
+function renderMultiplicityAnnotation(rel: UMLRelationship, indent: string): string {
+  const target = normalizeMultiplicityDisplay(rel.targetMultiplicity);
+  const source = normalizeMultiplicityDisplay(rel.sourceMultiplicity);
+  const details: string[] = [];
+  if (target) {
+    const { lower, upper } = parseMultiplicity(target);
+    if (formatMultiplicity(lower, upper) !== target) {
+      details.push(`${indent}  <details key="${UML_MULTIPLICITY_TARGET_KEY}" value="${escapeXml(target)}"/>`);
+    }
+  }
+  if (source !== impliedSourceMultiplicity(target)) {
+    details.push(`${indent}  <details key="${UML_MULTIPLICITY_SOURCE_KEY}" value="${escapeXml(source)}"/>`);
+  }
+  if (details.length === 0) return '';
+  return (
+    `${indent}<eAnnotations source="${UML_MULTIPLICITY_ANNOTATION}">` +
+    `\n${details.join('\n')}` +
+    `\n${indent}</eAnnotations>`
+  );
+}
+
 function renderReference(
   rel: UMLRelationship,
   targetName: string,
 ): string {
   const refName = rel.label?.trim() || `${rel.type}_${targetName}`.toLowerCase();
-  const { lower, upper } = parseMultiplicity(rel.targetMultiplicity ?? '0..1');
+  const targetMultiplicity = normalizeMultiplicityDisplay(rel.targetMultiplicity);
+  // No target multiplicity: leave the bounds out (Ecore then defaults to 0..1) so it reads back as
+  // "none" instead of becoming an explicit 0..1.
+  let boundsAttrs = '';
+  if (targetMultiplicity) {
+    const { lower, upper } = parseMultiplicity(targetMultiplicity);
+    boundsAttrs = ` lowerBound="${lower}" upperBound="${upper}"`;
+  }
   const containment = rel.type === 'composition';
   const openTag =
     `    <eStructuralFeatures xsi:type="ecore:EReference" name="${escapeXml(refName)}"` +
-    ` eType="#//${escapeXml(targetName)}" containment="${containment}"` +
-    ` lowerBound="${lower}" upperBound="${upper}"`;
-  const documentation = renderDocumentationAnnotation(rel.documentation, '      ');
-  return documentation
-    ? `${openTag}>\n${documentation}\n    </eStructuralFeatures>`
+    ` eType="#//${escapeXml(targetName)}" containment="${containment}"${boundsAttrs}`;
+  const annotations = [
+    renderDocumentationAnnotation(rel.documentation, '      '),
+    renderMultiplicityAnnotation(rel, '      '),
+  ].filter(Boolean).join('\n');
+  return annotations
+    ? `${openTag}>\n${annotations}\n    </eStructuralFeatures>`
     : `${openTag}/>`;
 }
 

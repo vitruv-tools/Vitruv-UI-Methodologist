@@ -95,7 +95,7 @@ describe('useEdgeColorMap', () => {
 
   it('survives corrupt stored data', () => {
     localStorage.setItem(getEdgeColorStorageKey('u', 'v'), 'not json');
-    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const { result } = renderHook(() => useEdgeColorMap('u', 'v'));
 

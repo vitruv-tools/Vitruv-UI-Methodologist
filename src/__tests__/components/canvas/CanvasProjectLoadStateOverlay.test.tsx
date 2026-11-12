@@ -8,8 +8,8 @@ describe('CanvasProjectLoadStateOverlay', () => {
       <CanvasProjectLoadStateOverlay
         state={{ status: 'loading' }}
         projectId={42}
-        onBack={jest.fn()}
-        onRetry={jest.fn()}
+        onBack={vi.fn()}
+        onRetry={vi.fn()}
       />,
     );
 
@@ -19,12 +19,12 @@ describe('CanvasProjectLoadStateOverlay', () => {
   });
 
   it('shows a back action for non-retryable failures', () => {
-    const onBack = jest.fn();
+    const onBack = vi.fn();
     render(
       <CanvasProjectLoadStateOverlay
         state={{ status: 'forbidden' }}
         onBack={onBack}
-        onRetry={jest.fn()}
+        onRetry={vi.fn()}
       />,
     );
 
@@ -36,11 +36,11 @@ describe('CanvasProjectLoadStateOverlay', () => {
   });
 
   it('shows the supplied error and invokes retry', () => {
-    const onRetry = jest.fn();
+    const onRetry = vi.fn();
     render(
       <CanvasProjectLoadStateOverlay
         state={{ status: 'error', message: 'Network unavailable.' }}
-        onBack={jest.fn()}
+        onBack={vi.fn()}
         onRetry={onRetry}
       />,
     );

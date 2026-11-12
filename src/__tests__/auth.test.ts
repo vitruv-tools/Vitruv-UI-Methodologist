@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { AuthService, AuthResponse, SignUpCredentials } from '../services/auth';
 
 const baseAuthResponse: AuthResponse = {
@@ -23,12 +24,12 @@ const credentials: SignUpCredentials = {
 describe('AuthService', () => {
   beforeEach(() => {
     localStorage.clear();
-    jest.restoreAllMocks();
-    global.fetch = jest.fn() as jest.Mock;
+    vi.restoreAllMocks();
+    global.fetch = vi.fn() as Mock;
   });
 
   it('stores tokens on successful signIn', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as Mock).mockResolvedValue({
       ok: true,
       json: async () => baseAuthResponse,
     });
@@ -43,7 +44,7 @@ describe('AuthService', () => {
   });
 
   it('throws parsed API message on failed signIn', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as Mock).mockResolvedValue({
       ok: false,
       statusText: 'Unauthorized',
       text: async () => JSON.stringify({ message: 'Bad credentials' }),
@@ -55,7 +56,7 @@ describe('AuthService', () => {
   });
 
   it('throws duplicate username message on signUp conflict', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as Mock).mockResolvedValue({
       ok: false,
       status: 409,
       statusText: 'Conflict',
@@ -68,7 +69,7 @@ describe('AuthService', () => {
   });
 
   it('stores signUp tokens when backend returns token payload', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as Mock).mockResolvedValue({
       ok: true,
       status: 200,
       statusText: 'OK',
@@ -83,7 +84,7 @@ describe('AuthService', () => {
   });
 
   it('throws extracted error message on forgotPassword failure', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as Mock).mockResolvedValue({
       ok: false,
       status: 400,
       statusText: 'Bad Request',
@@ -96,7 +97,7 @@ describe('AuthService', () => {
   it('signs out and returns null when refresh token is expired', async () => {
     localStorage.setItem('auth.refresh_token', 'expired-refresh');
     localStorage.setItem('auth.refresh_expires_at', String(Date.now() - 1000));
-    const signOutSpy = jest.spyOn(AuthService, 'signOut');
+    const signOutSpy = vi.spyOn(AuthService, 'signOut');
 
     const result = await AuthService.refreshToken();
 
@@ -120,7 +121,7 @@ describe('AuthService', () => {
     localStorage.setItem('auth.access_expires_at', String(Date.now() - 1000));
     localStorage.setItem('auth.refresh_token', 'refresh');
     localStorage.setItem('auth.refresh_expires_at', String(Date.now() + 120000));
-    jest.spyOn(AuthService, 'refreshToken').mockResolvedValue({
+    vi.spyOn(AuthService, 'refreshToken').mockResolvedValue({
       ...baseAuthResponse,
       access_token: 'new-access',
     });
@@ -142,14 +143,14 @@ describe('AuthService', () => {
 describe('AuthService – additional coverage', () => {
   beforeEach(() => {
     localStorage.clear();
-    jest.restoreAllMocks();
-    global.fetch = jest.fn() as jest.Mock;
+    vi.restoreAllMocks();
+    global.fetch = vi.fn() as Mock;
   });
 
   // ── signIn ────────────────────────────────────────────────────────────────
 
   it('stores all token fields on successful signIn', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as Mock).mockResolvedValue({
       ok: true,
       json: async () => baseAuthResponse,
     });
@@ -165,7 +166,7 @@ describe('AuthService – additional coverage', () => {
   });
 
   it('throws statusText fallback when error body is empty', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as Mock).mockResolvedValue({
       ok: false,
       statusText: 'Forbidden',
       text: async () => '',
@@ -179,7 +180,7 @@ describe('AuthService – additional coverage', () => {
   // ── signUp ────────────────────────────────────────────────────────────────
 
   it('throws email-duplicate message when error contains "email" and "exists"', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as Mock).mockResolvedValue({
       ok: false,
       status: 400,
       statusText: 'Bad Request',
@@ -192,7 +193,7 @@ describe('AuthService – additional coverage', () => {
   });
 
   it('throws 409 generic message when body does not contain username/email keywords', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as Mock).mockResolvedValue({
       ok: false,
       status: 409,
       statusText: 'Conflict',
@@ -205,7 +206,7 @@ describe('AuthService – additional coverage', () => {
   });
 
   it('throws 500 message for server errors', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as Mock).mockResolvedValue({
       ok: false,
       status: 500,
       statusText: 'Internal Server Error',
@@ -218,7 +219,7 @@ describe('AuthService – additional coverage', () => {
   });
 
   it('throws network-error message on fetch failure', async () => {
-    (global.fetch as jest.Mock).mockRejectedValue(new Error('Failed to fetch'));
+    (global.fetch as Mock).mockRejectedValue(new Error('Failed to fetch'));
 
     await expect(AuthService.signUp(credentials)).rejects.toThrow(
       'Network error',
@@ -227,7 +228,7 @@ describe('AuthService – additional coverage', () => {
 
   it('auto-signs-in when signUp succeeds but returns no tokens', async () => {
     // First call: signUp returns 200 but no access_token
-    (global.fetch as jest.Mock)
+    (global.fetch as Mock)
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
@@ -264,7 +265,7 @@ describe('AuthService – additional coverage', () => {
   });
 
   it('dispatches auth:signout event on signOut', async () => {
-    const listener = jest.fn();
+    const listener = vi.fn();
     globalThis.addEventListener('auth:signout', listener);
 
     await AuthService.signOut();
@@ -327,9 +328,9 @@ describe('AuthService – additional coverage', () => {
   it('returns null and signs out when refresh API fails', async () => {
     localStorage.setItem('auth.refresh_token', 'valid-refresh');
     localStorage.setItem('auth.refresh_expires_at', String(Date.now() + 120000));
-    (global.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 401 });
+    (global.fetch as Mock).mockResolvedValue({ ok: false, status: 401 });
 
-    const signOutSpy = jest.spyOn(AuthService, 'signOut');
+    const signOutSpy = vi.spyOn(AuthService, 'signOut');
     const result = await AuthService.refreshToken();
 
     expect(result).toBeNull();
@@ -339,7 +340,7 @@ describe('AuthService – additional coverage', () => {
   it('stores new tokens on successful refreshToken', async () => {
     localStorage.setItem('auth.refresh_token', 'valid-refresh');
     localStorage.setItem('auth.refresh_expires_at', String(Date.now() + 120000));
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as Mock).mockResolvedValue({
       ok: true,
       json: async () => ({ ...baseAuthResponse, access_token: 'new-tok' }),
     });
@@ -358,7 +359,7 @@ describe('AuthService – additional coverage', () => {
     localStorage.setItem('auth.refresh_token', 'exp-ref');
     localStorage.setItem('auth.refresh_expires_at', String(Date.now() - 1000));
 
-    const signOutSpy = jest.spyOn(AuthService, 'signOut');
+    const signOutSpy = vi.spyOn(AuthService, 'signOut');
     const token = await AuthService.ensureValidToken();
 
     expect(token).toBeNull();
@@ -373,13 +374,13 @@ describe('AuthService.exchangeFastLoginCode', () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
-    jest.restoreAllMocks();
-    global.fetch = jest.fn() as jest.Mock;
+    vi.restoreAllMocks();
+    global.fetch = vi.fn() as Mock;
   });
 
   it('stores all tokens in localStorage on success', async () => {
     sessionStorage.setItem('fast_login_redirect_uri', 'http://localhost:3000/login/callback');
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as Mock).mockResolvedValue({
       ok: true,
       json: async () => baseAuthResponse,
     });
@@ -397,14 +398,14 @@ describe('AuthService.exchangeFastLoginCode', () => {
 
   it('POSTs to the token endpoint with correct form fields', async () => {
     sessionStorage.setItem('fast_login_redirect_uri', 'http://localhost:3000/login/callback');
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as Mock).mockResolvedValue({
       ok: true,
       json: async () => baseAuthResponse,
     });
 
     await AuthService.exchangeFastLoginCode('my-code');
 
-    const [url, options] = (global.fetch as jest.Mock).mock.calls[0];
+    const [url, options] = (global.fetch as Mock).mock.calls[0];
     expect(url).toMatch(/\/auth\/realms\/methodologist\/protocol\/openid-connect\/token/);
     expect(options.method).toBe('POST');
     expect(options.headers['Content-Type']).toBe('application/x-www-form-urlencoded');
@@ -417,7 +418,7 @@ describe('AuthService.exchangeFastLoginCode', () => {
 
   it('clears the saved redirect_uri from sessionStorage after success', async () => {
     sessionStorage.setItem('fast_login_redirect_uri', 'http://localhost:3000/login/callback');
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as Mock).mockResolvedValue({
       ok: true,
       json: async () => baseAuthResponse,
     });
@@ -429,7 +430,7 @@ describe('AuthService.exchangeFastLoginCode', () => {
 
   it('uses saved sessionStorage redirect_uri in the request body', async () => {
     sessionStorage.setItem('fast_login_redirect_uri', 'https://example.com/callback');
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as Mock).mockResolvedValue({
       ok: true,
       json: async () => baseAuthResponse,
     });
@@ -437,14 +438,14 @@ describe('AuthService.exchangeFastLoginCode', () => {
     await AuthService.exchangeFastLoginCode('code');
 
     const body = new URLSearchParams(
-      (global.fetch as jest.Mock).mock.calls[0][1].body as string,
+      (global.fetch as Mock).mock.calls[0][1].body as string,
     );
     expect(body.get('redirect_uri')).toBe('https://example.com/callback');
   });
 
   it('throws parsed error message when token endpoint returns error', async () => {
     sessionStorage.setItem('fast_login_redirect_uri', 'http://localhost:3000/login/callback');
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as Mock).mockResolvedValue({
       ok: false,
       status: 400,
       statusText: 'Bad Request',
@@ -456,7 +457,7 @@ describe('AuthService.exchangeFastLoginCode', () => {
 
   it('throws when token endpoint error body is empty (falls back to statusText)', async () => {
     sessionStorage.setItem('fast_login_redirect_uri', 'http://localhost:3000/login/callback');
-    (global.fetch as jest.Mock).mockResolvedValue({
+    (global.fetch as Mock).mockResolvedValue({
       ok: false,
       status: 400,
       statusText: 'Bad Request',

@@ -1,3 +1,4 @@
+import type { MockedFunction } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import type { Node } from 'reactflow';
 import { useCanvasModeState } from '../../hooks/useCanvasModeState';
@@ -6,13 +7,13 @@ import {
   writeStoredCanvasMode,
 } from '../../utils/canvasModeStorage';
 
-jest.mock('../../utils/canvasModeStorage', () => ({
-  readStoredCanvasMode: jest.fn(),
-  writeStoredCanvasMode: jest.fn(),
+vi.mock('../../utils/canvasModeStorage', () => ({
+  readStoredCanvasMode: vi.fn(),
+  writeStoredCanvasMode: vi.fn(),
 }));
 
-const mockReadStoredCanvasMode = readStoredCanvasMode as jest.MockedFunction<typeof readStoredCanvasMode>;
-const mockWriteStoredCanvasMode = writeStoredCanvasMode as jest.MockedFunction<typeof writeStoredCanvasMode>;
+const mockReadStoredCanvasMode = readStoredCanvasMode as MockedFunction<typeof readStoredCanvasMode>;
+const mockWriteStoredCanvasMode = writeStoredCanvasMode as MockedFunction<typeof writeStoredCanvasMode>;
 
 const canvasNodes: Node[] = [
   {
@@ -24,7 +25,7 @@ const canvasNodes: Node[] = [
 
 describe('useCanvasModeState', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockReadStoredCanvasMode.mockReturnValue('modeling');
   });
 
@@ -43,7 +44,7 @@ describe('useCanvasModeState', () => {
   });
 
   it('snapshots nodes and persists when switching to constraints', () => {
-    const getCanvasNodes = jest.fn(() => canvasNodes);
+    const getCanvasNodes = vi.fn(() => canvasNodes);
     const { result } = renderHook(() => useCanvasModeState({
       projectId: 7,
       isViewOnly: false,
@@ -83,7 +84,7 @@ describe('useCanvasModeState', () => {
   });
 
   it('prevents view-only users from switching to constraints', () => {
-    const getCanvasNodes = jest.fn(() => canvasNodes);
+    const getCanvasNodes = vi.fn(() => canvasNodes);
     const { result } = renderHook(() => useCanvasModeState({
       projectId: 7,
       isViewOnly: true,
@@ -158,11 +159,11 @@ describe('useCanvasModeState', () => {
   });
 
   it('snapshots nodes, edges, and view types when switching to metrics', () => {
-    const getCanvasNodes = jest.fn(() => canvasNodes);
+    const getCanvasNodes = vi.fn(() => canvasNodes);
     const edges = [{ id: 'e1', source: 'a', target: 'b', type: 'reactions' }];
     const viewTypes = [{ id: 'vt-1', label: 'Architecture', scope: 'multi' as const, angle: 0, linkedNodeIds: ['a'], editable: false }];
-    const getCanvasEdges = jest.fn(() => edges);
-    const getViewTypes = jest.fn(() => viewTypes);
+    const getCanvasEdges = vi.fn(() => edges);
+    const getViewTypes = vi.fn(() => viewTypes);
     const { result } = renderHook(() => useCanvasModeState({
       projectId: 7,
       isViewOnly: false,

@@ -8,8 +8,8 @@ const defaultProps = (overrides?: any) => ({
     x: 100,
     y: 200,
     label: 'VT1',
-    onDelete: jest.fn(),
-    onClose: jest.fn(),
+    onDelete: vi.fn(),
+    onClose: vi.fn(),
     ...overrides,
 });
 
@@ -22,7 +22,7 @@ const getBackdrop = () =>
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('ViewTypeDeletionMenu', () => {
-    beforeEach(() => jest.clearAllMocks());
+    beforeEach(() => vi.clearAllMocks());
 
     // Rendering
 
@@ -49,22 +49,22 @@ describe('ViewTypeDeletionMenu', () => {
     // Delete behavior
 
     it('calls onDelete when Delete view type is clicked', () => {
-        const onDelete = jest.fn();
+        const onDelete = vi.fn();
         renderMenu({ onDelete });
         fireEvent.click(screen.getByRole('button', { name: /Delete view type/i }));
         expect(onDelete).toHaveBeenCalledTimes(1);
     });
 
     it('calls onClose when Delete view type is clicked', () => {
-        const onClose = jest.fn();
+        const onClose = vi.fn();
         renderMenu({ onClose });
         fireEvent.click(screen.getByRole('button', { name: /Delete view type/i }));
         expect(onClose).toHaveBeenCalledTimes(1);
     });
 
     it('calls both onDelete and onClose when Delete view type is clicked', () => {
-        const onDelete = jest.fn();
-        const onClose = jest.fn();
+        const onDelete = vi.fn();
+        const onClose = vi.fn();
         renderMenu({ onDelete, onClose });
         fireEvent.click(screen.getByRole('button', { name: /Delete view type/i }));
         expect(onDelete).toHaveBeenCalled();
@@ -74,28 +74,28 @@ describe('ViewTypeDeletionMenu', () => {
     // Backdrop / close behavior
 
     it('calls onClose when backdrop is clicked', () => {
-        const onClose = jest.fn();
+        const onClose = vi.fn();
         renderMenu({ onClose });
         fireEvent.click(getBackdrop());
         expect(onClose).toHaveBeenCalledTimes(1);
     });
 
     it('does not call onDelete when backdrop is clicked', () => {
-        const onDelete = jest.fn();
+        const onDelete = vi.fn();
         renderMenu({ onDelete });
         fireEvent.click(getBackdrop());
         expect(onDelete).not.toHaveBeenCalled();
     });
 
     it('does not close when clicking inside the menu panel', () => {
-        const onClose = jest.fn();
+        const onClose = vi.fn();
         renderMenu({ onClose });
         fireEvent.click(screen.getByText('VT1'));
         expect(onClose).not.toHaveBeenCalled();
     });
 
     it('does not call onDelete when clicking inside the menu panel without the button', () => {
-        const onDelete = jest.fn();
+        const onDelete = vi.fn();
         renderMenu({ onDelete });
         fireEvent.click(screen.getByText('VT1'));
         expect(onDelete).not.toHaveBeenCalled();

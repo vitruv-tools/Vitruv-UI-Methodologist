@@ -234,7 +234,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ userName, onNavigate }
           justifyContent: 'center',
         }}>
           <img
-            src="/assets/vitruvius1.png"
+            src={`${process.env.PUBLIC_URL}/assets/vitruvius1.png`}
             alt="Vitruvius"
             style={{
               width: '100%',

@@ -1,15 +1,19 @@
 /* eslint-disable import/first */
 
-jest.mock('../../../utils/ecoreToUml', () => require('../../../testSupport/umlDiagram/mockFactories').ecoreToUmlMock());
-jest.mock('../../../utils/saveMetaModelEcore', () => require('../../../testSupport/umlDiagram/mockFactories').saveMetaModelEcoreMock());
-jest.mock('../../../components/canvas/UMLDiagramMinimap', () => require('../../../testSupport/umlDiagram/mockFactories').umlDiagramMinimapMock());
-jest.mock('../../../utils/umlDiagramGeometry', () => require('../../../testSupport/umlDiagram/mockFactories').umlDiagramGeometryMock());
-jest.mock('../../../utils/umlClassLayout', () => require('../../../testSupport/umlDiagram/mockFactories').umlClassLayoutMock());
-jest.mock('../../../utils/umlLayoutStorage', () => require('../../../testSupport/umlDiagram/mockFactories').umlLayoutStorageMock());
-jest.mock('react-dom', () => ({
-  ...jest.requireActual('react-dom'),
-  createPortal: (node: unknown) => node,
-}));
+vi.mock('../../../utils/ecoreToUml', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).ecoreToUmlMock());
+vi.mock('../../../utils/saveMetaModelEcore', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).saveMetaModelEcoreMock());
+vi.mock('../../../components/canvas/UMLDiagramMinimap', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).umlDiagramMinimapMock());
+vi.mock('../../../utils/umlDiagramGeometry', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).umlDiagramGeometryMock());
+vi.mock('../../../utils/umlClassLayout', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).umlClassLayoutMock());
+vi.mock('../../../utils/umlLayoutStorage', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).umlLayoutStorageMock());
+vi.mock('react-dom', async () => {
+  const actual = await vi.importActual<any>('react-dom');
+  const mocked = {
+    ...actual,
+    createPortal: (node: unknown) => node,
+  };
+  return { ...mocked, default: mocked };
+});
 
 import { createRef } from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
@@ -65,7 +69,7 @@ function setupDiagram(props: Parameters<typeof renderDiagram>[0] = {}) {
 
 beforeEach(() => {
   useUmlClassClipboardStore.setState({ snapshot: null });
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('UMLDiagram copy and paste', () => {
@@ -279,8 +283,8 @@ describe('UMLDiagram copy and paste', () => {
         ecoreContent={REF_ECORE}
         viewOnly
         zIndex={1}
-        onFocus={jest.fn()}
-        onClose={jest.fn()}
+        onFocus={vi.fn()}
+        onClose={vi.fn()}
       />,
     );
     fireEvent.mouseDown(classBox('Order', readOnlyContainer));
@@ -411,8 +415,8 @@ describe('full-screen UML editor', () => {
         layoutScopeId="test"
         ecoreContent={SIMPLE_ECORE}
         zIndex={1}
-        onFocus={jest.fn()}
-        onClose={jest.fn()}
+        onFocus={vi.fn()}
+        onClose={vi.fn()}
       />,
     );
     const classCount = () => screen.getAllByRole('group', { name: /^UML class/ }).length;

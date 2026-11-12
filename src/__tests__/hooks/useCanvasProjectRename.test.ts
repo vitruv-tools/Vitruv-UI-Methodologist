@@ -9,13 +9,13 @@ const createOptions = (
   projectId: 7,
   projectName: 'Current project',
   isViewOnly: false,
-  renameProject: jest.fn().mockResolvedValue(undefined),
-  onRenamed: jest.fn(),
+  renameProject: vi.fn().mockResolvedValue(undefined),
+  onRenamed: vi.fn(),
   ...overrides,
 });
 
 afterEach(() => {
-  jest.restoreAllMocks();
+  vi.restoreAllMocks();
 });
 
 describe('useCanvasProjectRename', () => {
@@ -51,7 +51,7 @@ describe('useCanvasProjectRename', () => {
   });
 
   it('closes blank submissions without renaming', async () => {
-    const renameProject = jest.fn().mockResolvedValue(undefined);
+    const renameProject = vi.fn().mockResolvedValue(undefined);
     const options = createOptions({ renameProject });
     const { result } = renderHook(() => useCanvasProjectRename(options));
 
@@ -69,7 +69,7 @@ describe('useCanvasProjectRename', () => {
   });
 
   it('closes unchanged submissions without renaming', async () => {
-    const renameProject = jest.fn().mockResolvedValue(undefined);
+    const renameProject = vi.fn().mockResolvedValue(undefined);
     const options = createOptions({ renameProject });
     const { result } = renderHook(() => useCanvasProjectRename(options));
 
@@ -86,7 +86,7 @@ describe('useCanvasProjectRename', () => {
   });
 
   it('closes submissions without a project ID and does not rename', async () => {
-    const renameProject = jest.fn().mockResolvedValue(undefined);
+    const renameProject = vi.fn().mockResolvedValue(undefined);
     const options = createOptions({
       projectId: undefined,
       renameProject,
@@ -107,7 +107,7 @@ describe('useCanvasProjectRename', () => {
   });
 
   it('prevents view-only confirmation without renaming', async () => {
-    const renameProject = jest.fn().mockResolvedValue(undefined);
+    const renameProject = vi.fn().mockResolvedValue(undefined);
     const options = createOptions({
       isViewOnly: true,
       renameProject,
@@ -128,8 +128,8 @@ describe('useCanvasProjectRename', () => {
   });
 
   it('renames with the trimmed input and notifies success', async () => {
-    const renameProject = jest.fn().mockResolvedValue({ status: 200 });
-    const onRenamed = jest.fn();
+    const renameProject = vi.fn().mockResolvedValue({ status: 200 });
+    const onRenamed = vi.fn();
     const options = createOptions({ renameProject, onRenamed });
     const { result } = renderHook(() => useCanvasProjectRename(options));
 
@@ -149,9 +149,9 @@ describe('useCanvasProjectRename', () => {
 
   it('logs rename failure without notifying success and resets state', async () => {
     const error = new Error('Rename rejected');
-    const renameProject = jest.fn().mockRejectedValue(error);
-    const onRenamed = jest.fn();
-    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const renameProject = vi.fn().mockRejectedValue(error);
+    const onRenamed = vi.fn();
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const options = createOptions({ renameProject, onRenamed });
     const { result } = renderHook(() => useCanvasProjectRename(options));
 
@@ -171,10 +171,10 @@ describe('useCanvasProjectRename', () => {
 
   it('keeps saving state active while rename is pending', async () => {
     let resolveRename: ((value: unknown) => void) | undefined;
-    const renameProject = jest.fn(() => new Promise<unknown>(resolve => {
+    const renameProject = vi.fn(() => new Promise<unknown>(resolve => {
       resolveRename = resolve;
     }));
-    const onRenamed = jest.fn();
+    const onRenamed = vi.fn();
     const options = createOptions({ renameProject, onRenamed });
     const { result } = renderHook(() => useCanvasProjectRename(options));
 

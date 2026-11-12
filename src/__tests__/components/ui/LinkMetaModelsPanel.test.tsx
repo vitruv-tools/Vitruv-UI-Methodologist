@@ -1,21 +1,23 @@
+import type { Mock } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { LinkMetaModelsPanel } from '../../../components/ui/LinkMetaModelsPanel';
 import { VsumMetaModelRef, VsumMetaModelRelation } from '../../../types';
+import * as apiModule from '../../../services/api';
 
-jest.mock('../../../services/api', () => ({
+vi.mock('../../../services/api', () => ({
   apiService: {
-    findMetaModels: jest.fn(),
-    uploadFile: jest.fn(),
-    syncVsumChanges: jest.fn(),
+    findMetaModels: vi.fn(),
+    uploadFile: vi.fn(),
+    syncVsumChanges: vi.fn(),
   },
 }));
 
-const { apiService } = require('../../../services/api') as {
+const { apiService } = (apiModule as unknown) as {
   apiService: {
-    findMetaModels: jest.Mock;
-    uploadFile: jest.Mock;
-    syncVsumChanges: jest.Mock;
+    findMetaModels: Mock;
+    uploadFile: Mock;
+    syncVsumChanges: Mock;
   };
 };
 
@@ -67,7 +69,7 @@ const waitForOptionsLoaded = async () => {
 
 describe('LinkMetaModelsPanel', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     apiService.findMetaModels.mockResolvedValue({ data: catalogMetaModels, message: null });
   });
 
@@ -77,7 +79,7 @@ describe('LinkMetaModelsPanel', () => {
         vsumId={1}
         existingMetaModels={existingMetaModels}
         existingRelations={existingRelations}
-        onLinked={jest.fn()}
+        onLinked={vi.fn()}
       />,
     );
 
@@ -92,7 +94,7 @@ describe('LinkMetaModelsPanel', () => {
         vsumId={1}
         existingMetaModels={[]}
         existingRelations={[]}
-        onLinked={jest.fn()}
+        onLinked={vi.fn()}
       />,
     );
 
@@ -106,7 +108,7 @@ describe('LinkMetaModelsPanel', () => {
         vsumId={1}
         existingMetaModels={existingMetaModels}
         existingRelations={existingRelations}
-        onLinked={jest.fn()}
+        onLinked={vi.fn()}
       />,
     );
 
@@ -124,7 +126,7 @@ describe('LinkMetaModelsPanel', () => {
         vsumId={1}
         existingMetaModels={existingMetaModels}
         existingRelations={existingRelations}
-        onLinked={jest.fn()}
+        onLinked={vi.fn()}
       />,
     );
 
@@ -145,7 +147,7 @@ describe('LinkMetaModelsPanel', () => {
         vsumId={1}
         existingMetaModels={existingMetaModels}
         existingRelations={existingRelations}
-        onLinked={jest.fn()}
+        onLinked={vi.fn()}
       />,
     );
 
@@ -167,7 +169,7 @@ describe('LinkMetaModelsPanel', () => {
   it('uploads the reactions file and merges the new relation with the existing ones on submit', async () => {
     apiService.uploadFile.mockResolvedValue({ data: { id: 99 }, message: 'ok' });
     apiService.syncVsumChanges.mockResolvedValue({ data: null, message: 'ok' });
-    const onLinked = jest.fn();
+    const onLinked = vi.fn();
 
     render(
       <LinkMetaModelsPanel
@@ -205,7 +207,7 @@ describe('LinkMetaModelsPanel', () => {
   it('surfaces an error and does not call onLinked when the sync request fails', async () => {
     apiService.uploadFile.mockResolvedValue({ data: { id: 99 }, message: 'ok' });
     apiService.syncVsumChanges.mockRejectedValue(new Error('MetaModel Ids not found in this VSUM'));
-    const onLinked = jest.fn();
+    const onLinked = vi.fn();
 
     render(
       <LinkMetaModelsPanel
@@ -240,7 +242,7 @@ describe('LinkMetaModelsPanel', () => {
         vsumId={1}
         existingMetaModels={existingMetaModels}
         existingRelations={existingRelations}
-        onLinked={jest.fn()}
+        onLinked={vi.fn()}
       />,
     );
 

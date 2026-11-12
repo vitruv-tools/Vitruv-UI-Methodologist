@@ -1,15 +1,20 @@
+import type { Mock } from 'vitest';
 /* eslint-disable import/first */
 
-jest.mock('../../../utils/ecoreToUml', () => require('../../../testSupport/umlDiagram/mockFactories').ecoreToUmlMock());
-jest.mock('../../../utils/saveMetaModelEcore', () => require('../../../testSupport/umlDiagram/mockFactories').saveMetaModelEcoreMock());
-jest.mock('../../../components/canvas/UMLDiagramMinimap', () => require('../../../testSupport/umlDiagram/mockFactories').umlDiagramMinimapMock());
-jest.mock('../../../utils/umlDiagramGeometry', () => require('../../../testSupport/umlDiagram/mockFactories').umlDiagramGeometryMock());
-jest.mock('../../../utils/umlClassLayout', () => require('../../../testSupport/umlDiagram/mockFactories').umlClassLayoutMock());
-jest.mock('../../../utils/umlLayoutStorage', () => require('../../../testSupport/umlDiagram/mockFactories').umlLayoutStorageMock());
-jest.mock('react-dom', () => ({
-  ...jest.requireActual('react-dom'),
-  createPortal: (node: unknown) => node,
-}));
+vi.mock('../../../utils/ecoreToUml', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).ecoreToUmlMock());
+vi.mock('../../../utils/saveMetaModelEcore', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).saveMetaModelEcoreMock());
+vi.mock('../../../components/canvas/UMLDiagramMinimap', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).umlDiagramMinimapMock());
+vi.mock('../../../utils/umlDiagramGeometry', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).umlDiagramGeometryMock());
+vi.mock('../../../utils/umlClassLayout', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).umlClassLayoutMock());
+vi.mock('../../../utils/umlLayoutStorage', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).umlLayoutStorageMock());
+vi.mock('react-dom', async () => {
+  const actual = await vi.importActual<any>('react-dom');
+  const mocked = {
+    ...actual,
+    createPortal: (node: unknown) => node,
+  };
+  return { ...mocked, default: mocked };
+});
 
 import { createRef } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -22,7 +27,7 @@ import { EMPTY_ECORE, REF_ECORE, SIMPLE_ECORE } from '../../../testSupport/umlDi
 import { renderDiagram } from '../../../testSupport/umlDiagram/renderUtils';
 
 const win = globalThis as unknown as Window;
-const saveToLibrary = saveMetaModelEcore as jest.Mock;
+const saveToLibrary = saveMetaModelEcore as Mock;
 
 const CLASS_LABEL = /^UML (?:class|abstract class|interface) ([^,]+)/;
 
@@ -75,7 +80,7 @@ function copyFromClosedModel(...names: string[]) {
 
 beforeEach(() => {
   useUmlClassClipboardStore.setState({ snapshot: null, editorIds: [] });
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('pasting copied classes into another model', () => {
@@ -139,7 +144,7 @@ describe('pasting copied classes into another model', () => {
 
   it('removes the pasted classes with one undo and saves nothing until Save is clicked', () => {
     copyFromClosedModel('Person', 'Employee');
-    const onSaved = jest.fn();
+    const onSaved = vi.fn();
     const target = openDiagram({
       ecoreContent: REF_ECORE,
       saveContext: {
@@ -170,8 +175,8 @@ describe('pasting copied classes into another model', () => {
         ecoreContent={REF_ECORE}
         viewOnly
         zIndex={1}
-        onFocus={jest.fn()}
-        onClose={jest.fn()}
+        onFocus={vi.fn()}
+        onClose={vi.fn()}
       />,
     );
 
@@ -202,7 +207,7 @@ describe('pasting between the Model library and projects', () => {
   const PROJECT: ModelLocation = { layoutScopeId: 'project-1', saveTarget: 'workspace' };
   const OTHER_PROJECT: ModelLocation = { layoutScopeId: 'project-2', saveTarget: 'workspace' };
 
-  function openEditor(location: ModelLocation, ecoreContent: string, onSaved = jest.fn()) {
+  function openEditor(location: ModelLocation, ecoreContent: string, onSaved = vi.fn()) {
     return render(
       <FloatingUMLPanel
         id={`${location.layoutScopeId}-panel`}
@@ -215,17 +220,18 @@ describe('pasting between the Model library and projects', () => {
           ecoreFileId: 70,
           modelName: 'model',
           saveTarget: location.saveTarget,
+          persistWorkspaceEcore: async () => undefined,
           onSaved,
         }}
         zIndex={1}
-        onFocus={jest.fn()}
-        onClose={jest.fn()}
+        onFocus={vi.fn()}
+        onClose={vi.fn()}
       />,
     );
   }
 
   /** Classes the target's save sent on: Model library models go to the library API, project models to the project. */
-  async function savedClassNames(location: ModelLocation, onSaved: jest.Mock): Promise<string[]> {
+  async function savedClassNames(location: ModelLocation, onSaved: Mock): Promise<string[]> {
     if (location.saveTarget === 'library') {
       await waitFor(() => expect(saveToLibrary).toHaveBeenCalledTimes(1));
       return saveToLibrary.mock.calls[0][0].model.classes.map((classItem: { name: string }) => classItem.name);
@@ -249,7 +255,7 @@ describe('pasting between the Model library and projects', () => {
     copyClasses(sourceEditor, 'Person', 'Employee');
     closeSourceEditor();
 
-    const onSaved = jest.fn();
+    const onSaved = vi.fn();
     const { container: targetEditor } = openEditor(to, REF_ECORE, onSaved);
     paste();
 

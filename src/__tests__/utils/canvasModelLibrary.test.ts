@@ -1,3 +1,4 @@
+import type { MockedFunction } from 'vitest';
 import {
   fetchEcoreFileById,
   fetchLibraryDrawerModels,
@@ -6,10 +7,10 @@ import {
 import { apiService } from '../../services/api';
 import type { VsumMetaModelRef } from '../../types/vsum';
 
-jest.mock('../../services/api', () => ({
+vi.mock('../../services/api', () => ({
   apiService: {
-    findMetaModels: jest.fn(),
-    getFile: jest.fn(),
+    findMetaModels: vi.fn(),
+    getFile: vi.fn(),
   },
 }));
 
@@ -31,13 +32,13 @@ const createMetaModel = (
 });
 
 describe('canvasModelLibrary', () => {
-  const findMetaModels = apiService.findMetaModels as jest.MockedFunction<
+  const findMetaModels = apiService.findMetaModels as MockedFunction<
     typeof apiService.findMetaModels
   >;
-  const getFile = apiService.getFile as jest.MockedFunction<typeof apiService.getFile>;
+  const getFile = apiService.getFile as MockedFunction<typeof apiService.getFile>;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('maps project and library models while preserving fields and source-ID fallback', () => {

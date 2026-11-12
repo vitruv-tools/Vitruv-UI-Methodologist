@@ -1,16 +1,20 @@
+import type { Mock } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ShareProjectModal } from '../../../components/ui/ShareProjectModal';
+import * as apiModule from '../../../services/api';
 
-jest.mock('../../../services/api', () => ({
+vi.mock('../../../services/api', () => ({
   apiService: {
-    getVsumMembers: jest.fn().mockResolvedValue({ data: [] }),
-    inviteVsumViewer: jest.fn().mockResolvedValue({ message: 'Invitation sent' }),
-    removeVsumMember: jest.fn().mockResolvedValue({}),
+    getVsumMembers: vi.fn().mockResolvedValue({ data: [] }),
+    inviteVsumViewer: vi.fn().mockResolvedValue({ message: 'Invitation sent' }),
+    removeVsumMember: vi.fn().mockResolvedValue({}),
+    searchUsers: vi.fn().mockResolvedValue({ data: [] }),
+    addVsumMember: vi.fn().mockResolvedValue({}),
   },
 }));
 
-jest.mock('../../../components/ui/ConfirmDialog', () => ({
+vi.mock('../../../components/ui/ConfirmDialog', () => ({
   ConfirmDialog: ({
     isOpen,
     onConfirm,
@@ -31,20 +35,22 @@ jest.mock('../../../components/ui/ConfirmDialog', () => ({
   ) : null,
 }));
 
-const { apiService } = require('../../../services/api') as {
+const { apiService } = (apiModule as unknown) as {
   apiService: {
-    getVsumMembers: jest.Mock;
-    inviteVsumViewer: jest.Mock;
-    removeVsumMember: jest.Mock;
+    getVsumMembers: Mock;
+    inviteVsumViewer: Mock;
+    removeVsumMember: Mock;
+    searchUsers: Mock;
+    addVsumMember: Mock;
   };
 };
 
 describe('ShareProjectModal', () => {
-  const onClose = jest.fn();
-  const onInvited = jest.fn();
+  const onClose = vi.fn();
+  const onInvited = vi.fn();
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     apiService.getVsumMembers.mockResolvedValue({ data: [] });
   });
 
@@ -90,6 +96,65 @@ describe('ShareProjectModal', () => {
     await waitFor(() => {
       expect(apiService.removeVsumMember).toHaveBeenCalledWith(42);
       expect(onInvited).toHaveBeenCalled();
+    });
+  });
+
+  describe('Add people', () => {
+    const bob = { id: 7, firstName: 'Bob', lastName: 'Member', email: 'bob@example.com' };
+    const carol = { id: 8, firstName: 'Carol', lastName: 'Coder', email: 'carol@example.com' };
+
+    const renderModal = () => render(
+      <ShareProjectModal isOpen vsumId={1} onClose={onClose} onInvited={onInvited} />,
+    );
+    const addAs = (role: 'VIEWER' | 'MEMBER') =>
+      fireEvent.change(screen.getByLabelText('Add as'), { target: { value: role } });
+    const searchFor = (text: string) =>
+      fireEvent.change(screen.getByPlaceholderText('Name or email…'), { target: { value: text } });
+
+    it('invites a viewer by email by default', async () => {
+      apiService.inviteVsumViewer.mockResolvedValue({ message: 'Invitation sent' });
+      renderModal();
+
+      expect(screen.getByLabelText('Add as')).toHaveValue('VIEWER');
+      fireEvent.change(screen.getByPlaceholderText('viewer@example.com'), { target: { value: 'vic@example.com' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Invite viewer' }));
+
+      await waitFor(() => {
+        expect(apiService.inviteVsumViewer).toHaveBeenCalledWith(1, { email: 'vic@example.com' });
+      });
+    });
+
+    it('adds a registered user as a member', async () => {
+      apiService.searchUsers.mockResolvedValue({ data: [bob] });
+      apiService.addVsumMember.mockResolvedValue({});
+      renderModal();
+
+      addAs('MEMBER');
+      expect(screen.getByRole('button', { name: 'Add member' })).toBeDisabled();
+      searchFor('bob');
+      fireEvent.click(await screen.findByRole('option', { name: /Bob Member/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Add member' }));
+
+      await waitFor(() => {
+        expect(apiService.addVsumMember).toHaveBeenCalledWith(1, { userId: 7 });
+        expect(onInvited).toHaveBeenCalled();
+      });
+      expect(await screen.findByText('Bob Member was added as a member.')).toBeInTheDocument();
+    });
+
+    it('does not suggest people who already have access', async () => {
+      apiService.getVsumMembers.mockResolvedValue({
+        data: [{ id: 3, firstName: 'Bob', lastName: 'Member', email: 'bob@example.com', role: 'VIEWER' }],
+      });
+      apiService.searchUsers.mockResolvedValue({ data: [bob, carol] });
+      renderModal();
+      await screen.findByText('bob@example.com');
+
+      addAs('MEMBER');
+      searchFor('example');
+
+      expect(await screen.findByRole('option', { name: /Carol Coder/ })).toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: /Bob Member/ })).not.toBeInTheDocument();
     });
   });
 });

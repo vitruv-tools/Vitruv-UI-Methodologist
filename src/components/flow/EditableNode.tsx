@@ -500,7 +500,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
   const nodeData = data || {};
 
   const updateNodeData = (updates: Partial<UMLNodeData>) => {
-    console.log('Node data update:', updates);
+    //was console log before, is left for future use.
   };
 
   const handleDelete = () => {

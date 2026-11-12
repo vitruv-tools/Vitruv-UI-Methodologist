@@ -55,7 +55,7 @@ export interface ZipStoreFile {
   content: string;
 }
 
-function concat(parts: Uint8Array[]): Uint8Array {
+function concat(parts: Uint8Array[]): Uint8Array<ArrayBuffer> {
   const total = parts.reduce((sum, part) => sum + part.length, 0);
   const out = new Uint8Array(total);
   let offset = 0;
@@ -79,7 +79,7 @@ function u32(value: number): Uint8Array {
 }
 
 /** Build an uncompressed (STORE) ZIP so CSVs open in Excel without extra libraries. */
-export function buildZipBytes(files: ZipStoreFile[]): Uint8Array {
+export function buildZipBytes(files: ZipStoreFile[]): Uint8Array<ArrayBuffer> {
   const locals: Uint8Array[] = [];
   const centrals: Uint8Array[] = [];
   let offset = 0;

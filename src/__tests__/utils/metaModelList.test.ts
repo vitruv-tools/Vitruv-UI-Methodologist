@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import {
   describeProjectUsage,
   extractCreatePayload,
@@ -11,14 +12,14 @@ import {
 } from '../../utils/metaModelList';
 import { apiService } from '../../services/api';
 
-jest.mock('../../services/api', () => ({
+vi.mock('../../services/api', () => ({
   apiService: {
-    findMetaModels: jest.fn(),
+    findMetaModels: vi.fn(),
   },
 }));
 
 describe('fetchLibraryMetaModels', () => {
-  const findMetaModels = apiService.findMetaModels as jest.Mock;
+  const findMetaModels = apiService.findMetaModels as Mock;
 
   beforeEach(() => {
     findMetaModels.mockReset();
@@ -169,7 +170,7 @@ describe('mergeCreatedMetaModel', () => {
 });
 
 describe('fetchLibraryMetaModelsAfterCreate', () => {
-  const findMetaModels = apiService.findMetaModels as jest.Mock;
+  const findMetaModels = apiService.findMetaModels as Mock;
 
   beforeEach(() => {
     findMetaModels.mockReset();

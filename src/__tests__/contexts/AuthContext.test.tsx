@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import React from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import { AuthProvider, useAuth } from '../../contexts/AuthContext';
@@ -9,26 +10,26 @@ import { apiService } from '../../services/api';
 global.btoa = (str: string) => Buffer.from(str, 'binary').toString('base64');
 global.atob = (str: string) => Buffer.from(str, 'base64').toString('binary');
 
-jest.mock('../../services/auth', () => ({
+vi.mock('../../services/auth', () => ({
   AuthService: {
-    isAuthenticated:  jest.fn(),
-    getCurrentUser:   jest.fn(),
-    setCurrentUser:   jest.fn(),
-    getAccessToken:   jest.fn(),
-    signIn:           jest.fn(),
-    signOut:          jest.fn(),
-    refreshToken:     jest.fn(),
+    isAuthenticated:  vi.fn(),
+    getCurrentUser:   vi.fn(),
+    setCurrentUser:   vi.fn(),
+    getAccessToken:   vi.fn(),
+    signIn:           vi.fn(),
+    signOut:          vi.fn(),
+    refreshToken:     vi.fn(),
   },
 }));
 
-jest.mock('../../services/api', () => ({
+vi.mock('../../services/api', () => ({
   apiService: {
-    getUserInfo: jest.fn(),
+    getUserInfo: vi.fn(),
   },
 }));
 
-jest.mock('../../hooks/useTokenRefresh', () => ({
-  useTokenRefresh: () => ({ refreshToken: jest.fn().mockResolvedValue(null) }),
+vi.mock('../../hooks/useTokenRefresh', () => ({
+  useTokenRefresh: () => ({ refreshToken: vi.fn().mockResolvedValue(null) }),
 }));
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -50,28 +51,28 @@ const setup = () => render(<AuthProvider><TestConsumer /></AuthProvider>);
 // ── tests ─────────────────────────────────────────────────────────────────────
 
 describe('AuthContext – initial load', () => {
-  afterEach(() => jest.clearAllMocks());
+  afterEach(() => vi.clearAllMocks());
 
   it('resolves to "none" when not authenticated', async () => {
-    (AuthService.isAuthenticated as jest.Mock).mockReturnValue(false);
-    (AuthService.getCurrentUser as jest.Mock).mockReturnValue(null);
+    (AuthService.isAuthenticated as Mock).mockReturnValue(false);
+    (AuthService.getCurrentUser as Mock).mockReturnValue(null);
     setup();
     await waitFor(() => expect(screen.getByTestId('user').textContent).toBe('none'));
   });
 
   it('sets user from localStorage cache when present', async () => {
     const cachedUser = { id: '1', username: 'cached_user', email: 'c@kit.edu', givenName: 'C', familyName: 'U', emailVerified: true };
-    (AuthService.isAuthenticated as jest.Mock).mockReturnValue(true);
-    (AuthService.getCurrentUser as jest.Mock).mockReturnValue(cachedUser);
+    (AuthService.isAuthenticated as Mock).mockReturnValue(true);
+    (AuthService.getCurrentUser as Mock).mockReturnValue(cachedUser);
     setup();
     await waitFor(() => expect(screen.getByTestId('user').textContent).toBe('cached_user'));
   });
 
   it('fetches from API when no cache is present', async () => {
-    (AuthService.isAuthenticated as jest.Mock).mockReturnValue(true);
-    (AuthService.getCurrentUser as jest.Mock).mockReturnValue(null);
-    (AuthService.getAccessToken as jest.Mock).mockReturnValue(null);
-    (apiService.getUserInfo as jest.Mock).mockResolvedValue({
+    (AuthService.isAuthenticated as Mock).mockReturnValue(true);
+    (AuthService.getCurrentUser as Mock).mockReturnValue(null);
+    (AuthService.getAccessToken as Mock).mockReturnValue(null);
+    (apiService.getUserInfo as Mock).mockResolvedValue({
       data: { id: 42, email: 'api@kit.edu', firstName: 'Api', lastName: 'User', verified: true },
       message: null,
     });
@@ -81,10 +82,10 @@ describe('AuthContext – initial load', () => {
 
   it('uses preferred_username from JWT when fetching from API', async () => {
     const token = createJwt({ preferred_username: 'jwtuser', email: 'jwt@kit.edu' });
-    (AuthService.isAuthenticated as jest.Mock).mockReturnValue(true);
-    (AuthService.getCurrentUser as jest.Mock).mockReturnValue(null);
-    (AuthService.getAccessToken as jest.Mock).mockReturnValue(token);
-    (apiService.getUserInfo as jest.Mock).mockResolvedValue({
+    (AuthService.isAuthenticated as Mock).mockReturnValue(true);
+    (AuthService.getCurrentUser as Mock).mockReturnValue(null);
+    (AuthService.getAccessToken as Mock).mockReturnValue(token);
+    (apiService.getUserInfo as Mock).mockResolvedValue({
       data: { id: 7, email: 'jwt@kit.edu', firstName: 'Jwt', lastName: 'User', verified: true },
       message: null,
     });
@@ -93,22 +94,22 @@ describe('AuthContext – initial load', () => {
   });
 
   it('sets user to none when not authenticated', async () => {
-    (AuthService.isAuthenticated as jest.Mock).mockReturnValue(false);
-    (AuthService.getCurrentUser as jest.Mock).mockReturnValue(null);
+    (AuthService.isAuthenticated as Mock).mockReturnValue(false);
+    (AuthService.getCurrentUser as Mock).mockReturnValue(null);
     setup();
     await waitFor(() => expect(screen.getByTestId('user').textContent).toBe('none'));
   });
 });
 
 describe('AuthContext – refreshCurrentUser', () => {
-  afterEach(() => jest.clearAllMocks());
+  afterEach(() => vi.clearAllMocks());
 
   it('updates user state after refresh', async () => {
-    (AuthService.isAuthenticated as jest.Mock).mockReturnValue(true);
-    (AuthService.getCurrentUser as jest.Mock).mockReturnValue(null);
-    (AuthService.getAccessToken as jest.Mock).mockReturnValue(null);
-    (AuthService.setCurrentUser as jest.Mock).mockImplementation(() => {});
-    (apiService.getUserInfo as jest.Mock).mockResolvedValue({
+    (AuthService.isAuthenticated as Mock).mockReturnValue(true);
+    (AuthService.getCurrentUser as Mock).mockReturnValue(null);
+    (AuthService.getAccessToken as Mock).mockReturnValue(null);
+    (AuthService.setCurrentUser as Mock).mockImplementation(() => {});
+    (apiService.getUserInfo as Mock).mockResolvedValue({
       data: { id: 5, email: 'refresh@kit.edu', firstName: 'Re', lastName: 'Fresh', verified: true },
       message: null,
     });
@@ -127,7 +128,7 @@ describe('AuthContext – refreshCurrentUser', () => {
     await waitFor(() => expect(screen.getByTestId('user').textContent).toBe('refresh'));
 
     // simulate name change on backend
-    (apiService.getUserInfo as jest.Mock).mockResolvedValue({
+    (apiService.getUserInfo as Mock).mockResolvedValue({
       data: { id: 5, email: 'refresh@kit.edu', firstName: 'Updated', lastName: 'Name', verified: true },
       message: null,
     });
@@ -137,13 +138,13 @@ describe('AuthContext – refreshCurrentUser', () => {
 });
 
 describe('AuthContext – signOut', () => {
-  afterEach(() => jest.clearAllMocks());
+  afterEach(() => vi.clearAllMocks());
 
   it('calls AuthService.signOut and clears user', async () => {
     const cachedUser = { id: '1', username: 'u', email: 'u@kit.edu', givenName: 'U', familyName: 'U', emailVerified: true };
-    (AuthService.isAuthenticated as jest.Mock).mockReturnValue(true);
-    (AuthService.getCurrentUser as jest.Mock).mockReturnValue(cachedUser);
-    (AuthService.signOut as jest.Mock).mockResolvedValue(undefined);
+    (AuthService.isAuthenticated as Mock).mockReturnValue(true);
+    (AuthService.getCurrentUser as Mock).mockReturnValue(cachedUser);
+    (AuthService.signOut as Mock).mockResolvedValue(undefined);
 
     const SignOutConsumer: React.FC = () => {
       const { user, signOut } = useAuth();
@@ -164,13 +165,13 @@ describe('AuthContext – signOut', () => {
 });
 
 describe('AuthContext – resolveVerifiedFlag', () => {
-  afterEach(() => jest.clearAllMocks());
+  afterEach(() => vi.clearAllMocks());
 
   it('marks emailVerified true when backend returns verified:true', async () => {
-    (AuthService.isAuthenticated as jest.Mock).mockReturnValue(true);
-    (AuthService.getCurrentUser as jest.Mock).mockReturnValue(null);
-    (AuthService.getAccessToken as jest.Mock).mockReturnValue(null);
-    (apiService.getUserInfo as jest.Mock).mockResolvedValue({
+    (AuthService.isAuthenticated as Mock).mockReturnValue(true);
+    (AuthService.getCurrentUser as Mock).mockReturnValue(null);
+    (AuthService.getAccessToken as Mock).mockReturnValue(null);
+    (apiService.getUserInfo as Mock).mockResolvedValue({
       data: { id: 1, email: 'v@kit.edu', firstName: 'V', lastName: 'U', verified: true },
       message: null,
     });

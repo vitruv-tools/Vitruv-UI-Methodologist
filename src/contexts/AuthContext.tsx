@@ -243,7 +243,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
     // 🔐 SIGN UP with:
     // - Username required and length ≥ 4
     // - Password detailed validation (with explicit allowed symbols)
-    const signUp = useCallback(async (userData: SignUpCredentials) => {
+    const signUp = useCallback((userData: SignUpCredentials): Promise<void> => {
         try {
             // Username validation
             if (!userData.username || userData.username.trim().length < 4) {
@@ -280,8 +280,6 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
                 );
             }
 
-            const signUpResponse = await AuthService.signUp(userData);
-
             const newUser: User = {
                 id: Date.now().toString(),
                 username: userData.username,
@@ -292,12 +290,11 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
 
             AuthService.setCurrentUser(newUser);
             setUser(newUser);
-
-            console.log('Sign up successful:', signUpResponse.message);
-        } catch (error: any) {
+            return Promise.resolve();
+        } catch (error: unknown) {
             console.error('Sign up error:', error);
-            if (error instanceof Error) throw error;
-            throw new Error('Sign up failed');
+            if (error instanceof Error) return Promise.reject(error);
+            return Promise.reject(new Error('Sign up failed'));
         }
     }, []);
 

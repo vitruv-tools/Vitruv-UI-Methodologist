@@ -10,10 +10,10 @@ const defaultProps = (overrides?: any) => ({
     scope: 'single' as const,
     cx: 100,
     cy: 100,
-    onDragStart: jest.fn(),
-    onDrag: jest.fn(),
-    onDragEnd: jest.fn(),
-    onClick: jest.fn(),
+    onDragStart: vi.fn(),
+    onDrag: vi.fn(),
+    onDragEnd: vi.fn(),
+    onClick: vi.fn(),
     ...overrides,
 });
 
@@ -44,10 +44,10 @@ const simulateDrag = (element: Element, moveEvents = 1) => {
 
 describe('ViewTypeBubble', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         // jsdom does not implement setPointerCapture/releasePointerCapture on SVG elements
-        SVGElement.prototype.setPointerCapture = jest.fn();
-        SVGElement.prototype.releasePointerCapture = jest.fn();
+        SVGElement.prototype.setPointerCapture = vi.fn();
+        SVGElement.prototype.releasePointerCapture = vi.fn();
     });
 
     afterEach(() => {
@@ -131,21 +131,21 @@ describe('ViewTypeBubble', () => {
     // Click behavior
 
     it('calls onClick when pointer down then up without move', () => {
-        const onClick = jest.fn();
+        const onClick = vi.fn();
         const { container } = renderBubble({ onClick });
         simulateClick(getGroup(container));
         expect(onClick).toHaveBeenCalledWith('vt-1');
     });
 
     it('calls onDragStart on pointer down', () => {
-        const onDragStart = jest.fn();
+        const onDragStart = vi.fn();
         const { container } = renderBubble({ onDragStart });
         fireEvent.pointerDown(getGroup(container), { pointerId: 1 });
         expect(onDragStart).toHaveBeenCalledWith('vt-1');
     });
 
     it('does not call onClick after a drag', () => {
-        const onClick = jest.fn();
+        const onClick = vi.fn();
         const { container } = renderBubble({ onClick });
         simulateDrag(getGroup(container));
         expect(onClick).not.toHaveBeenCalled();
@@ -154,7 +154,7 @@ describe('ViewTypeBubble', () => {
     // Drag behavior
 
     it('calls onDrag during pointer move when dragging', () => {
-        const onDrag = jest.fn();
+        const onDrag = vi.fn();
         const { container } = renderBubble({ onDrag });
         const g = getGroup(container);
         fireEvent.pointerDown(g, { pointerId: 1 });
@@ -163,29 +163,29 @@ describe('ViewTypeBubble', () => {
     });
 
     it('does not call onDrag during pointer move when not dragging', () => {
-        const onDrag = jest.fn();
+        const onDrag = vi.fn();
         const { container } = renderBubble({ onDrag });
         fireEvent.pointerMove(getGroup(container), { pointerId: 1, clientX: 120, clientY: 105 });
         expect(onDrag).not.toHaveBeenCalled();
     });
 
     it('calls onDragEnd on pointer up after drag', () => {
-        const onDragEnd = jest.fn();
+        const onDragEnd = vi.fn();
         const { container } = renderBubble({ onDragEnd });
         simulateDrag(getGroup(container));
         expect(onDragEnd).toHaveBeenCalledWith('vt-1');
     });
 
     it('calls onDragEnd even on a simple click (no move)', () => {
-        const onDragEnd = jest.fn();
+        const onDragEnd = vi.fn();
         const { container } = renderBubble({ onDragEnd });
         simulateClick(getGroup(container));
         expect(onDragEnd).toHaveBeenCalledWith('vt-1');
     });
 
     it('does not call onDrag if pointer up happens without prior pointer down', () => {
-        const onDrag = jest.fn();
-        const onDragEnd = jest.fn();
+        const onDrag = vi.fn();
+        const onDragEnd = vi.fn();
         const { container } = renderBubble({ onDrag, onDragEnd });
         fireEvent.pointerUp(getGroup(container), { pointerId: 1 });
         expect(onDrag).not.toHaveBeenCalled();
@@ -193,7 +193,7 @@ describe('ViewTypeBubble', () => {
     });
 
     it('stops propagation on pointer down', () => {
-        const parentHandler = jest.fn();
+        const parentHandler = vi.fn();
         const { container } = render(
             <svg onClick={parentHandler}>
                 <ViewTypeBubble {...defaultProps()} />
@@ -204,7 +204,7 @@ describe('ViewTypeBubble', () => {
     });
 
     it('stops propagation on pointer move during drag', () => {
-        const parentHandler = jest.fn();
+        const parentHandler = vi.fn();
         const { container } = render(
             <svg onPointerMove={parentHandler}>
                 <ViewTypeBubble {...defaultProps()} />
@@ -219,8 +219,8 @@ describe('ViewTypeBubble', () => {
     // Multiple drags
 
     it('can be dragged multiple times independently', () => {
-        const onClick = jest.fn();
-        const onDrag = jest.fn();
+        const onClick = vi.fn();
+        const onDrag = vi.fn();
         const { container } = renderBubble({ onClick, onDrag });
         const g = getGroup(container);
 

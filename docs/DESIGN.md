@@ -109,7 +109,7 @@ These are exclusively used as color-coded prefixes inside diagram nodes.
 
 | Token | Size | Weight | Tracking | Use |
 |---|---|---|---|---|
-| `{typography.page-title}` | 26px | 700 | -0.02em | Main page headings ("Model Library", "Dashboard") |
+| `{typography.page-title}` | 26px | 700 | -0.02em | Main page headings ("Model Library", "Workbench") |
 | `{typography.modal-title}` | 26px | 700 | -0.5px | Modal and dialog headings |
 | `{typography.section-head}` | 18–20px | 600–700 | 0 | Node header names, section headings |
 | `{typography.app-title}` | 16–18px | 600–700 | -0.01em | Sidebar wordmark, in-header app title |

@@ -34,7 +34,7 @@ describe('ToastProvider', () => {
   });
 
   it('keeps an error toast until it is closed and shows the backend message', () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     render(
       <ToastProvider>
         <TestComponent />
@@ -46,12 +46,12 @@ describe('ToastProvider', () => {
     expect(screen.getByRole('button', { name: 'Copy error message' })).toBeInTheDocument();
 
     act(() => {
-      jest.advanceTimersByTime(10000);
+      vi.advanceTimersByTime(10000);
     });
     expect(screen.getByText('org.example.FooException: Could not save the project')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(screen.queryByText('org.example.FooException: Could not save the project')).not.toBeInTheDocument();
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 });

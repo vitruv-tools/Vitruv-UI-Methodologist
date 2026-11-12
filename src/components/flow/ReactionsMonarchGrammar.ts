@@ -1,5 +1,4 @@
-import type { languages } from 'monaco-editor';
-import * as monaco from 'monaco-editor';
+import type { editor, languages } from 'monaco-editor';
 
 export const reactionsMonarch: languages.IMonarchLanguage = {
   defaultToken: '',
@@ -85,16 +84,58 @@ export const reactionsMonarch: languages.IMonarchLanguage = {
   },
 };
 
-export const reactionsTheme: monaco.editor.IStandaloneThemeData = {
+// Suffix matches the monarch tokenPostfix so these colors do not override OCL tokens.
+function reactionTokenRules(colors: {
+  keyword: string;
+  delimiter: string;
+  operator: string;
+  comment: string;
+  string: string;
+}): editor.ITokenThemeRule[] {
+  return [
+    { token: 'keyword.reactions', foreground: colors.keyword },
+    { token: 'delimiter.bracket.reactions', foreground: colors.delimiter },
+    { token: 'delimiter.reactions', foreground: colors.delimiter },
+    { token: 'operator.reactions', foreground: colors.operator },
+    { token: 'comment.reactions', foreground: colors.comment, fontStyle: 'italic' },
+    { token: 'string.reactions', foreground: colors.string },
+  ];
+}
+
+export const reactionsLightTokenRules = reactionTokenRules({
+  keyword: '0451A5',
+  delimiter: 'AF00DB',
+  operator: 'A31515',
+  comment: '008000',
+  string: 'A31515',
+});
+
+export const reactionsDarkTokenRules = reactionTokenRules({
+  keyword: '569CD6',
+  delimiter: 'DA70D6',
+  operator: 'D16969',
+  comment: '6A9955',
+  string: 'CE9178',
+});
+
+export const reactionsTheme: editor.IStandaloneThemeData = {
   base: 'vs-dark',
   inherit: true,
-  rules: [
-    { token: 'keyword', foreground: '569CD6' },           // Blau für Keywords
-    { token: 'delimiter.bracket', foreground: 'DA70D6' }, // Pink für {}[]()
-    { token: 'delimiter', foreground: 'DA70D6' },         // Pink für ,;:
-    { token: 'operator', foreground: 'D16969' },          // Rot für ==, !=, &&, etc.
-  ],
-  colors: {}
+  rules: reactionsDarkTokenRules,
+  colors: {
+    'editor.background': '#0f172a',
+    'editor.foreground': '#f1f5f9',
+  },
+};
+
+export const reactionsThemeLight: editor.IStandaloneThemeData = {
+  base: 'vs',
+  inherit: true,
+  rules: reactionsLightTokenRules,
+  colors: {
+    'editor.background': '#ffffff',
+    'editor.foreground': '#0f172a',
+  },
 };
 
 export const reactionsLanguageConfig: languages.LanguageConfiguration = {

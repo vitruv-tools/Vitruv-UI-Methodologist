@@ -72,12 +72,6 @@ export function getFastLoginAuthorizationUrl(
 
   const url = `${baseUrl}/auth/realms/${REALM}/protocol/openid-connect/auth?${params.toString()}`;
 
-  console.log('[Fast Login] Authorization URL built', {
-    redirectUri,
-    realm: REALM,
-    clientId: CLIENT_ID,
-    idpHint,
-  });
   return url;
 }
 

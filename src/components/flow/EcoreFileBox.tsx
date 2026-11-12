@@ -5,6 +5,7 @@ import { apiService } from '../../services/api';
 import { downloadTextAsFile } from '../../utils/downloadFile';
 import { ConnectionHandle } from './ConnectionHandle';
 import { HandlePosition } from './connectionHandleLayout';
+import { isAdditiveSelectionEvent } from '../canvas/umlClassSelection';
 import { darken, metaModelDisplayColor } from '../../utils/metaModelColors';
 
 export { cardColor, darken, metaModelDisplayColor } from '../../utils/metaModelColors';
@@ -18,7 +19,8 @@ interface EcoreFileBoxData {
   version?: string;
   fileContent: string;
   onExpand: (fileName: string, fileContent: string) => void;
-  onSelect: (fileName: string) => void;
+  /** `additive`: Shift/Cmd/Ctrl+click, which adds the model to the selection or removes it. */
+  onSelect: (fileName: string, options?: { additive?: boolean }) => void;
   onDelete?: (id: string) => void;
   onRequestDelete?: (id: string) => void;
   onRename?: (id: string, newFileName: string) => void;
@@ -33,6 +35,8 @@ interface EcoreFileBoxData {
   isConstraintContext?: boolean;
   isConstraintFilter?: boolean;
   readOnly?: boolean;
+  /** Locked with the lock button: the Open UML button is hidden, double-click still opens UML. */
+  locked?: boolean;
   description?: string;
   keywords?: string;
   domain?: string;
@@ -138,6 +142,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     isConstraintContext = false,
     isConstraintFilter = false,
     readOnly = false,
+    locked = false,
   } = data;
 
   const boxRef = useRef<HTMLDivElement>(null);
@@ -181,7 +186,10 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     onShowDetails, setShowMenu, { keywords, metaModelId, fileName, version, description, domain, createdAt, fileContent },
   );
 
-  const handleClick = (e: React.MouseEvent) => { e.stopPropagation(); onSelect(fileName); };
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onSelect(fileName, { additive: isAdditiveSelectionEvent(e) });
+  };
   const openUml = (e?: React.SyntheticEvent) => {
     e?.stopPropagation();
     onExpand(fileName, fileContent);
@@ -200,6 +208,9 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     openContextMenu();
   };
   const handleCardKeyDown = (e: React.KeyboardEvent) => {
+    if (!renaming && (e.key === 'Delete' || e.key === 'Backspace')) {
+      return;
+    }
     e.stopPropagation();
     if (renaming) return;
     if (e.key === 'Enter') {
@@ -368,7 +379,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
             </span>
           )}
 
-          {readOnly && (
+          {readOnly && !locked && (
             <button
               type="button"
               title="Open UML diagram"

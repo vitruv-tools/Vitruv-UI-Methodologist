@@ -4,12 +4,12 @@ import userEvent from '@testing-library/user-event';
 import { OtpVerificationPage } from '../../pages/OtpVerificationPage';
 
 // Use "mock" prefix so Jest allows referencing them in module factory
-const mockNavigate = jest.fn();
-const mockRefreshCurrentUser = jest.fn();
-const mockVerifyOtp = jest.fn();
-const mockResendOtp = jest.fn();
+const mockNavigate = vi.fn();
+const mockRefreshCurrentUser = vi.fn();
+const mockVerifyOtp = vi.fn();
+const mockResendOtp = vi.fn();
 
-jest.mock('react-router-dom', () => ({
+vi.mock('react-router-dom', () => ({
   // Only mock the hooks that this page uses
   useNavigate: () => mockNavigate,
   useLocation: () => ({
@@ -18,13 +18,13 @@ jest.mock('react-router-dom', () => ({
   }),
 }));
 
-jest.mock('../../contexts/AuthContext', () => ({
+vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({
     refreshCurrentUser: mockRefreshCurrentUser,
   }),
 }));
 
-jest.mock('../../services/api', () => ({
+vi.mock('../../services/api', () => ({
   apiService: {
     verifyOtp: (...args: any[]) => mockVerifyOtp(...args),
     resendOtp: (...args: any[]) => mockResendOtp(...args),
@@ -33,15 +33,15 @@ jest.mock('../../services/api', () => ({
 
 describe('OtpVerificationPage', () => {
   beforeEach(() => {
-    jest.useFakeTimers();
-    jest.clearAllMocks();
+    vi.useFakeTimers();
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
     act(() => {
-      jest.runOnlyPendingTimers();
+      vi.runOnlyPendingTimers();
     });
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   it('renders main UI elements', () => {
@@ -86,7 +86,7 @@ describe('OtpVerificationPage', () => {
 
     // Advance timers to trigger redirect
     act(() => {
-      jest.advanceTimersByTime(1500);
+      vi.advanceTimersByTime(1500);
     });
     expect(mockNavigate).toHaveBeenCalledWith('/mml');
   });
@@ -102,7 +102,7 @@ describe('OtpVerificationPage', () => {
     render(<OtpVerificationPage />);
 
     act(() => {
-      jest.advanceTimersByTime(5 * 60 * 1000);
+      vi.advanceTimersByTime(5 * 60 * 1000);
     });
 
     expect(
@@ -116,7 +116,7 @@ describe('OtpVerificationPage', () => {
     render(<OtpVerificationPage />);
 
     act(() => {
-      jest.advanceTimersByTime(5 * 60 * 1000);
+      vi.advanceTimersByTime(5 * 60 * 1000);
     });
 
     const resendButton = screen.getByRole('button', { name: /Resend code/i });

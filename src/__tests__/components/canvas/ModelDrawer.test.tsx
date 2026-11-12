@@ -2,20 +2,21 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ModelDrawer, DrawerModel } from '../../../components/canvas/ModelDrawer';
 
-const mockReloadLayout = jest.fn();
-const mockSave = jest.fn();
-const mockIsDirty = jest.fn(() => false);
+const mockReloadLayout = vi.fn();
+const mockSave = vi.fn();
+const mockIsDirty = vi.fn(() => false);
 
-jest.mock('../../../components/canvas/UMLDiagram', () => {
-  const { forwardRef, createElement, useImperativeHandle } = require('react');
+vi.mock('../../../components/canvas/UMLDiagram', async () => {
+  const { forwardRef, createElement, useImperativeHandle } = (await import('react'));
   return {
+    WORKSPACE_DOT_BACKGROUND: {},
     UMLDiagram: forwardRef((_props: any, ref: any) => {
       useImperativeHandle(ref, () => ({
-        flushLayout: jest.fn(),
+        flushLayout: vi.fn(),
         reloadLayout: mockReloadLayout,
         isDirty: mockIsDirty,
         save: mockSave,
-        tryEscape: jest.fn(() => false),
+        tryEscape: vi.fn(() => false),
       }));
       return createElement('div', { 'data-testid': 'uml-diagram' });
     }),
@@ -27,14 +28,14 @@ const model2: DrawerModel = { id: 2, name: 'Person Model', domain: 'hr' };
 
 const defaultProps = {
   models: [],
-  onClose: jest.fn(),
-  onAddModel: jest.fn(),
+  onClose: vi.fn(),
+  onAddModel: vi.fn(),
   myLibraryModels: [model1, model2],
   publicLibraryModels: [{ id: 3, name: 'Public Model', domain: 'public' }],
 };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mockIsDirty.mockReturnValue(false);
 });
 
@@ -45,7 +46,7 @@ describe('ModelDrawer real component', () => {
   });
 
   it('close button calls onClose', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     render(<ModelDrawer {...defaultProps} onClose={onClose} />);
     const closeBtn = screen.getByTitle('Close');
     fireEvent.click(closeBtn);
@@ -118,7 +119,7 @@ describe('ModelDrawer real component', () => {
   });
 
   it('clicking a model card calls onAddModel with the model', () => {
-    const onAddModel = jest.fn();
+    const onAddModel = vi.fn();
     render(<ModelDrawer {...defaultProps} onAddModel={onAddModel} />);
     // Model cards are buttons with title "Click to add · Right-click for details"
     const cardButtons = screen.getAllByTitle('Click to add · Right-click for details');
@@ -163,7 +164,7 @@ describe('ModelDrawer real component', () => {
       name: 'Library name',
       inProject: true,
     };
-    const onRenameProjectModel = jest.fn().mockResolvedValue(undefined);
+    const onRenameProjectModel = vi.fn().mockResolvedValue(undefined);
 
     render(
       <ModelDrawer

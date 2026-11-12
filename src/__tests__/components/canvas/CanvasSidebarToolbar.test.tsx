@@ -8,6 +8,8 @@ const labels = {
   save: 'Save. Save changes to this project',
   checkBuild: 'Check build. Verify the project compiles successfully',
   addMetaModels: 'Add meta-models. Open the meta-model drawer to add models to the canvas',
+  utilityMethods: 'Utility Methods. Define utility methods for reactions',
+  utilityMethodsReadOnly: 'Utility Methods. View the utility methods available to reactions',
   viewReaction: 'View reaction. Select a connection line, then click to open the code',
   undoAvailable: 'Undo. Undo the last action',
   undoUnavailable: 'Undo. Nothing to undo',
@@ -17,25 +19,27 @@ const labels = {
 
 const createProps = () => ({
   addReactionMode: false,
-  onToggleReactionMode: jest.fn(),
-  onOpenReactionEditor: jest.fn(),
-  onToggleModelDrawer: jest.fn(),
-  onDownloadArtifact: jest.fn(),
-  onDownloadBundle: jest.fn(),
-  onSaveChanges: jest.fn(),
-  onCheckBuild: jest.fn(),
-  onUndo: jest.fn(),
-  onRedo: jest.fn(),
+  onToggleReactionMode: vi.fn(),
+  onOpenReactionEditor: vi.fn(),
+  onToggleModelDrawer: vi.fn(),
+  onDownloadProject: vi.fn(),
+  onDownloadJar: vi.fn(),
+  onDownloadBundle: vi.fn(),
+  onSaveChanges: vi.fn(),
+  onCheckBuild: vi.fn(),
+  onUndo: vi.fn(),
+  onRedo: vi.fn(),
   canUndo: true,
   canRedo: true,
-  downloadingArtifact: false,
+  downloadingProject: false,
+  downloadingJar: false,
   downloadingBundle: false,
   savingChanges: false,
   checkingBuild: false,
 });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('CanvasSidebarToolbar', () => {
@@ -59,7 +63,7 @@ describe('CanvasSidebarToolbar', () => {
     fireEvent.click(screen.getByRole('button', { name: labels.checkBuild }));
     fireEvent.click(screen.getByRole('button', { name: labels.addMetaModels }));
 
-    expect(props.onDownloadArtifact).toHaveBeenCalledTimes(1);
+    expect(props.onDownloadProject).toHaveBeenCalledTimes(1);
     expect(props.onSaveChanges).toHaveBeenCalledTimes(1);
     expect(props.onCheckBuild).toHaveBeenCalledTimes(1);
     expect(props.onToggleModelDrawer).toHaveBeenCalledTimes(1);
@@ -83,6 +87,35 @@ describe('CanvasSidebarToolbar', () => {
     expect(screen.queryByRole('button', { name: labels.addMetaModels })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: labels.undoAvailable })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: labels.redoAvailable })).not.toBeInTheDocument();
+  });
+
+  it('places the utility methods button above Add meta-models and opens the utility methods', () => {
+    const onOpenUtilityMethods = vi.fn();
+    render(<CanvasSidebarToolbar {...createProps()} onOpenUtilityMethods={onOpenUtilityMethods} />);
+
+    const labelsInOrder = screen.getAllByRole('button').map(button => button.getAttribute('aria-label'));
+    const utilityMethodsIndex = labelsInOrder.indexOf(labels.utilityMethods);
+    expect(utilityMethodsIndex).toBeGreaterThan(-1);
+    expect(labelsInOrder[utilityMethodsIndex + 1]).toBe(labels.addMetaModels);
+
+    fireEvent.click(screen.getByRole('button', { name: labels.utilityMethods }));
+    expect(onOpenUtilityMethods).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a toolbox icon, not a function symbol, on the utility methods button', () => {
+    render(<CanvasSidebarToolbar {...createProps()} onOpenUtilityMethods={vi.fn()} />);
+
+    const button = screen.getByRole('button', { name: labels.utilityMethods });
+    const icon = button.querySelector('svg');
+    expect(icon).toHaveAttribute('data-icon', 'toolbox');
+    expect(icon).toHaveAttribute('aria-hidden', 'true');
+    expect(button).not.toHaveTextContent(/fx/i);
+  });
+
+  it('offers the utility methods overview to view-only members', () => {
+    render(<CanvasSidebarToolbar {...createProps()} readOnly onOpenUtilityMethods={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: labels.utilityMethodsReadOnly })).toBeInTheDocument();
   });
 
   it('Select exits only active reaction mode', () => {
@@ -114,7 +147,7 @@ describe('CanvasSidebarToolbar', () => {
     expect(downloadButton).toHaveStyle({ cursor: 'not-allowed' });
     expect(saveButton).toHaveStyle({ cursor: 'not-allowed' });
     expect(buildButton).toHaveStyle({ cursor: 'not-allowed' });
-    expect(props.onDownloadArtifact).not.toHaveBeenCalled();
+    expect(props.onDownloadProject).not.toHaveBeenCalled();
     expect(props.onSaveChanges).not.toHaveBeenCalled();
     expect(props.onCheckBuild).not.toHaveBeenCalled();
   });
@@ -158,8 +191,32 @@ describe('CanvasSidebarToolbar', () => {
     fireEvent.click(screen.getByRole('button', { name: /Easy deploy package/ }));
 
     expect(props.onDownloadBundle).toHaveBeenCalledTimes(1);
-    expect(props.onDownloadArtifact).not.toHaveBeenCalled();
+    expect(props.onDownloadProject).not.toHaveBeenCalled();
     expect(screen.queryByText(/Easy deploy package/)).not.toBeInTheDocument();
+  });
+
+  it('offers the runnable JAR in the download menu', () => {
+    const props = createProps();
+    render(<CanvasSidebarToolbar {...props} />);
+
+    fireEvent.click(screen.getByRole('button', { name: labels.download }));
+    fireEvent.click(screen.getByRole('button', { name: /Runnable JAR/ }));
+
+    expect(props.onDownloadJar).toHaveBeenCalledTimes(1);
+    expect(props.onDownloadProject).not.toHaveBeenCalled();
+    expect(props.onDownloadBundle).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Runnable JAR/)).not.toBeInTheDocument();
+  });
+
+  it('suppresses downloads while the runnable JAR is downloading', () => {
+    const props = { ...createProps(), downloadingJar: true };
+    render(<CanvasSidebarToolbar {...props} />);
+
+    fireEvent.click(screen.getByRole('button', { name: labels.download }));
+    fireEvent.click(screen.getByRole('button', { name: labels.checkBuild }));
+
+    expect(props.onCheckBuild).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Runnable JAR/)).not.toBeInTheDocument();
   });
 
   it('closes the download menu on outside click without triggering a download', () => {
@@ -172,7 +229,7 @@ describe('CanvasSidebarToolbar', () => {
     fireEvent.mouseDown(document.body);
 
     expect(screen.queryByText('Project export')).not.toBeInTheDocument();
-    expect(props.onDownloadArtifact).not.toHaveBeenCalled();
+    expect(props.onDownloadProject).not.toHaveBeenCalled();
     expect(props.onDownloadBundle).not.toHaveBeenCalled();
   });
 

@@ -2,8 +2,8 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { EditableNode } from '../../../components/flow/EditableNode';
 
-jest.mock('reactflow', () => {
-  const actual = jest.requireActual('reactflow');
+vi.mock('reactflow', async () => {
+  const actual = (await vi.importActual<any>('reactflow'));
   return {
     ...actual,
     Handle: ({ id, type, position, isConnectable }: any) => (
@@ -39,7 +39,7 @@ function renderNode(
 
 describe('EditableNode', () => {
   it('renders a class node with its name and delete button when selected', () => {
-    const onDelete = jest.fn();
+    const onDelete = vi.fn();
 
     render(
       <EditableNode

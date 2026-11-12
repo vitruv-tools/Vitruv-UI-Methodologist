@@ -64,6 +64,7 @@ export interface MapFlowEdgeContext {
   handleEdgeDragEnd: (edgeId: string, point: { x: number; y: number }) => void;
   handleEdgeHandleChange: (edgeId: string, newSourceHandle: string, newTargetHandle: string) => void;
   handleEdgeReorderRequest: (edgeId: string, controlPoint: { x: number; y: number }) => void;
+  handleEdgeRouteChange?: (edgeId: string, points: Array<{ x: number; y: number }>) => void;
   getFineParallel?: (edge: Edge) => { index: number; total: number } | undefined;
   getReactionRoute?: (edge: Edge) => { points: Array<{ x: number; y: number }> } | undefined;
 }
@@ -80,6 +81,7 @@ function reactionEdgeInteractionHandlers(
       onEdgeDragEnd: undefined,
       onHandleChange: undefined,
       onReorderRequest: undefined,
+      onRouteChange: undefined,
     };
   }
 
@@ -89,6 +91,7 @@ function reactionEdgeInteractionHandlers(
     onEdgeDragEnd: ctx.handleEdgeDragEnd,
     onHandleChange: ctx.handleEdgeHandleChange,
     onReorderRequest: ctx.handleEdgeReorderRequest,
+    onRouteChange: ctx.handleEdgeRouteChange,
   };
 }
 
@@ -292,7 +295,7 @@ export function mapEcoreFlowNode(
     /** Locked with the lock button; nothing may be moved, unlike for read-only viewers. */
     locked?: boolean;
     expandedFileId: string | null;
-    selectedFileId: string | null;
+    selectedFileIds: string[];
     connectionDragState: ConnectionDragState | null;
     addReactionMode?: boolean;
     reactionSourceId: string | null;
@@ -300,7 +303,7 @@ export function mapEcoreFlowNode(
     constraintFilterNodeId?: string | null;
     edgeDistribution: unknown;
     handleEcoreFileExpand: (fileName: string, fileContent: string) => void;
-    handleEcoreFileSelect: (fileName: string) => void;
+    handleEcoreFileSelect: (fileName: string, options?: { additive?: boolean }) => void;
     onEcoreFileDelete?: (id: string) => void;
     handleRequestDelete: (id: string) => void;
     onEcoreFileRename?: (id: string, newFileName: string) => void;
@@ -316,7 +319,7 @@ export function mapEcoreFlowNode(
     readOnly,
     locked = false,
     expandedFileId,
-    selectedFileId,
+    selectedFileIds,
     connectionDragState,
     addReactionMode,
     reactionSourceId,
@@ -337,6 +340,7 @@ export function mapEcoreFlowNode(
     data: {
       ...node.data,
       readOnly,
+      locked,
       onExpand: handleEcoreFileExpand,
       onSelect: handleEcoreFileSelect,
       onDelete: readOnly ? undefined : onEcoreFileDelete,
@@ -351,7 +355,11 @@ export function mapEcoreFlowNode(
       isConstraintContext: constraintHighlightNodeId === node.id,
       isConstraintFilter: constraintFilterNodeId === node.id,
     },
-    selected: selectedFileId === node.id,
+    selected: selectedFileIds.includes(node.id),
+    // React Flow turns pointer events off for a node that is neither draggable nor
+    // selectable, which a locked canvas makes it. Keep the card clickable so its UML can
+    // still be opened; the card's read-only checks block every change.
+    style: locked ? { ...node.style, pointerEvents: 'all' } : node.style,
     // Draggable for viewers too — repositioning is local-only (see
     // isReadOnlyBlockedNodeChange). Still frozen on a locked canvas, mid-connection
     // and in add-reaction mode, where a drag would fight the click-to-target gesture.

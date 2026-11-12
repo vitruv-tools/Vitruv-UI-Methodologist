@@ -1,12 +1,13 @@
-jest.mock('monaco-editor', () => ({
+import type { Mock } from 'vitest';
+vi.mock('monaco-editor', () => ({
   languages: {
-    register: jest.fn(),
-    setMonarchTokensProvider: jest.fn(),
-    setLanguageConfiguration: jest.fn(),
-    getLanguages: jest.fn(() => []),
+    register: vi.fn(),
+    setMonarchTokensProvider: vi.fn(),
+    setLanguageConfiguration: vi.fn(),
+    getLanguages: vi.fn(() => []),
   },
   editor: {
-    defineTheme: jest.fn(),
+    defineTheme: vi.fn(),
   },
 }));
 
@@ -16,13 +17,14 @@ import {
   vitruvOCLLanguageId,
   vitruvOCLMonarch,
   vitruvOCLTheme,
+  vitruvOCLThemeDark,
   vitruvOCLLanguageConfig,
   registerVitruvOCLLanguage,
 } from '../../../components/constraints/VitruvOCLMonarchGrammar';
 
 beforeEach(() => {
-  jest.clearAllMocks();
-  (monacoMock.languages.getLanguages as jest.Mock).mockReturnValue([]);
+  vi.clearAllMocks();
+  (monacoMock.languages.getLanguages as Mock).mockReturnValue([]);
 });
 
 describe('vitruvOCLLanguageId', () => {
@@ -91,6 +93,27 @@ describe('vitruvOCLTheme', () => {
   });
 });
 
+describe('vitruvOCLThemeDark', () => {
+  it('should have base set to "vs-dark"', () => {
+    expect(vitruvOCLThemeDark.base).toBe('vs-dark');
+  });
+
+  it('should recolor every light-theme token for a dark background', () => {
+    const darkByToken = new Map(vitruvOCLThemeDark.rules.map((rule) => [rule.token, rule]));
+    for (const rule of vitruvOCLTheme.rules) {
+      const dark = darkByToken.get(rule.token);
+      expect(dark).toBeDefined();
+      expect(dark?.fontStyle).toBe(rule.fontStyle);
+      expect(dark?.foreground?.toLowerCase()).not.toBe('000000');
+      expect(dark?.foreground?.toLowerCase()).not.toBe('0000ff');
+    }
+  });
+
+  it('should use the app dark input background', () => {
+    expect(vitruvOCLThemeDark.colors?.['editor.background']).toBe('#0f172a');
+  });
+});
+
 describe('vitruvOCLLanguageConfig', () => {
   it('should have lineComment set to "--"', () => {
     expect(vitruvOCLLanguageConfig.comments).toBeDefined();
@@ -132,13 +155,14 @@ describe('registerVitruvOCLLanguage', () => {
     );
   });
 
-  it('should call defineTheme', () => {
+  it('should define the light and dark OCL themes', () => {
     registerVitruvOCLLanguage();
-    expect(monacoMock.editor.defineTheme).toHaveBeenCalled();
+    expect(monacoMock.editor.defineTheme).toHaveBeenCalledWith('vitruvocl-light', vitruvOCLTheme);
+    expect(monacoMock.editor.defineTheme).toHaveBeenCalledWith('vitruvocl-dark', vitruvOCLThemeDark);
   });
 
   it('should not register again when the language is already registered', () => {
-    (monacoMock.languages.getLanguages as jest.Mock).mockReturnValue([{ id: vitruvOCLLanguageId }]);
+    (monacoMock.languages.getLanguages as Mock).mockReturnValue([{ id: vitruvOCLLanguageId }]);
     registerVitruvOCLLanguage();
     expect(monacoMock.languages.register).not.toHaveBeenCalled();
     expect(monacoMock.languages.setMonarchTokensProvider).not.toHaveBeenCalled();
@@ -152,8 +176,8 @@ describe('registerVitruvOCLLanguage', () => {
     expect(monacoMock.languages.register).toHaveBeenCalledTimes(1);
 
     // Simulate language now being present
-    jest.clearAllMocks();
-    (monacoMock.languages.getLanguages as jest.Mock).mockReturnValue([{ id: vitruvOCLLanguageId }]);
+    vi.clearAllMocks();
+    (monacoMock.languages.getLanguages as Mock).mockReturnValue([{ id: vitruvOCLLanguageId }]);
 
     // Second call — should be a no-op
     registerVitruvOCLLanguage();

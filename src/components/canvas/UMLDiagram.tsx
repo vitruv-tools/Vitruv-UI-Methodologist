@@ -96,8 +96,11 @@ export interface UmlDiagramSaveContext {
   modelName: string;
   /** Defaults to `library` (Model Library / drawer). Canvas UML uses `workspace`. */
   saveTarget?: UmlDiagramSaveTarget;
-  /** `workspace` only: stores the serialized ecore in the project's copy. Rejects to keep the changes unsaved. */
-  persistWorkspaceEcore?: (ecoreContent: string) => Promise<void>;
+  /**
+   * `workspace` only: stores the serialized ecore in the project's copy. Rejects to keep the changes
+   * unsaved. May return the file id of the project's copy when saving gave it a new one.
+   */
+  persistWorkspaceEcore?: (ecoreContent: string) => Promise<{ ecoreFileId?: number } | undefined>;
   /** Passed to library save so relink works when GET /meta-models/{id} is unavailable. */
   metaModelMetadata?: MetaModelSaveMetadata;
   onSaved?: (result: { ecoreContent: string; ecoreFileId: number }) => void;
@@ -168,8 +171,12 @@ async function saveWorkspaceEcore(
   saveContext: UmlDiagramSaveContext,
   ecoreContent: string,
 ): Promise<{ ecoreContent: string; ecoreFileId: number }> {
-  await saveContext.persistWorkspaceEcore?.(ecoreContent);
-  return { ecoreContent, ecoreFileId: saveContext.ecoreFileId };
+  // Never report "saved" when nothing was written, or the edit is lost when the project closes.
+  if (!saveContext.persistWorkspaceEcore) {
+    throw new Error('This model cannot be saved to the project.');
+  }
+  const persisted = await saveContext.persistWorkspaceEcore(ecoreContent);
+  return { ecoreContent, ecoreFileId: persisted?.ecoreFileId ?? saveContext.ecoreFileId };
 }
 
 export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({

@@ -1,3 +1,4 @@
+import type { MockedFunction } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import {
   getUmlMultiplicityPosition,
@@ -8,20 +9,20 @@ import type {
 } from '../../components/canvas/umlDiagramTypes';
 import { useUmlRelationshipLayers } from '../../hooks/useUmlRelationshipLayers';
 
-jest.mock('../../components/canvas/umlDiagramLayoutGeometry', () => {
-  const actual = jest.requireActual(
+vi.mock('../../components/canvas/umlDiagramLayoutGeometry', async () => {
+  const actual = await vi.importActual<any>(
     '../../components/canvas/umlDiagramLayoutGeometry',
   );
   return {
     ...actual,
-    getUmlMultiplicityPosition: jest.fn(
+    getUmlMultiplicityPosition: vi.fn(
       actual.getUmlMultiplicityPosition,
     ),
   };
 });
 
 const mockedGetUmlMultiplicityPosition = (
-  getUmlMultiplicityPosition as jest.MockedFunction<
+  getUmlMultiplicityPosition as MockedFunction<
     typeof getUmlMultiplicityPosition
   >
 );
@@ -60,7 +61,7 @@ function createRelationship(
 
 describe('useUmlRelationshipLayers', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('builds endpoint, inset, and bridge layouts while omitting missing endpoints', () => {

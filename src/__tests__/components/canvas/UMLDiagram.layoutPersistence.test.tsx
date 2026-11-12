@@ -18,7 +18,7 @@ const ECORE = `<?xml version="1.0" encoding="UTF-8"?>
 const SCOPE = 'layout-persistence-test';
 const FILE = 'shop.ecore';
 
-function workspaceSaveContext(onSaved = jest.fn()): UmlDiagramSaveContext {
+function workspaceSaveContext(onSaved = vi.fn()): UmlDiagramSaveContext {
   return { metaModelId: '1', ecoreFileId: 1, modelName: 'shop', saveTarget: 'workspace', onSaved };
 }
 
@@ -48,18 +48,18 @@ afterAll(() => {
 });
 
 beforeEach(() => {
-  jest.useFakeTimers();
+  vi.useFakeTimers();
   localStorage.clear();
 });
 
 afterEach(() => {
-  jest.useRealTimers();
+  vi.useRealTimers();
   localStorage.clear();
 });
 
 function advance(ms: number) {
   act(() => {
-    jest.advanceTimersByTime(ms);
+    vi.advanceTimersByTime(ms);
   });
 }
 
@@ -96,7 +96,7 @@ function dragClass(classBox: HTMLElement, dx: number, dy: number) {
 
 describe('UMLDiagram layout persistence', () => {
   it('enables Save when a class is moved and saves positions without touching the ecore', () => {
-    const onSaved = jest.fn();
+    const onSaved = vi.fn();
     renderEditor(workspaceSaveContext(onSaved));
     const savedBefore = loadUmlLayout(SCOPE, FILE);
     expect(saveButton()).toBeDisabled();

@@ -1,5 +1,6 @@
-export function ecoreToUmlMock() {
-  const actual = jest.requireActual('../../utils/ecoreToUml') as typeof import('../../utils/ecoreToUml');
+import React from 'react';
+export async function ecoreToUmlMock() {
+  const actual = (await vi.importActual<any>('../../utils/ecoreToUml')) as typeof import('../../utils/ecoreToUml');
   const simpleModel = {
     classes: [
       {
@@ -74,7 +75,7 @@ export function ecoreToUmlMock() {
 
 export function saveMetaModelEcoreMock() {
   return {
-    saveMetaModelEcore: jest.fn(() => Promise.resolve()),
+    saveMetaModelEcore: vi.fn(() => Promise.resolve()),
   };
 }
 
@@ -87,8 +88,7 @@ export function umlValidationMock() {
 export function umlDiagramMinimapMock() {
   return {
     UMLDiagramMinimap: () => {
-      const mockReact = require('react');
-      return mockReact.createElement('div', {
+      return React.createElement('div', {
         'data-testid': 'uml-minimap-stub',
         'aria-label': 'Diagram overview — click or drag to pan',
       });
@@ -105,8 +105,8 @@ export function umlDiagramGeometryMock() {
   };
 }
 
-export function umlClassLayoutMock() {
-  const actual = jest.requireActual('../../utils/umlClassLayout');
+export async function umlClassLayoutMock() {
+  const actual = (await vi.importActual<any>('../../utils/umlClassLayout'));
   return {
     ...actual,
     assignParallelRelMeta: (rels: unknown[]) => rels,
@@ -114,8 +114,8 @@ export function umlClassLayoutMock() {
   };
 }
 
-export function umlLayoutStorageMock() {
-  const actual = jest.requireActual('../../utils/umlLayoutStorage');
+export async function umlLayoutStorageMock() {
+  const actual = (await vi.importActual<any>('../../utils/umlLayoutStorage'));
   return {
     ...actual,
     applyLayoutToUmlClasses: (_scope: string, _file: string, classes: unknown[]) => classes,

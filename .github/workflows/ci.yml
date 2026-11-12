@@ -83,4 +83,3 @@ jobs:
             -Dsonar.projectKey=vitruv-tools_Vitruv-UI-Methodologist
             -Dsonar.organization=vitruv-tools
             -Dsonar.javascript.internal.js.ts.disabled=true
-

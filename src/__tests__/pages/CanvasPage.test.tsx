@@ -1,20 +1,24 @@
+import type { Mock, MockInstance } from 'vitest';
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { CanvasPage } from '../../pages/CanvasPage';
 import { apiService } from '../../services/api';
 import { useModalBodyLock } from '../../components/ui/modalUtils';
+import { canvasModeStorageKey } from '../../utils/canvasModeStorage';
 
-const mockNavigate = jest.fn();
+const mockNavigate = vi.fn();
+const mockOpenReactionFileAt = vi.fn();
+const mockOpenMetaModelFile = vi.fn();
 let mockRouteId = '10';
 
-jest.mock('react-router-dom', () => ({
-  ...jest.requireActual('react-router-dom'),
+vi.mock('react-router-dom', async () => ({
+  ...(await vi.importActual<any>('react-router-dom')),
   useNavigate: () => mockNavigate,
   useParams: () => ({ id: mockRouteId }),
   useLocation: () => ({ state: null }),
 }));
 
-jest.mock('../../contexts/AuthContext', () => ({
+vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({
     user: {
       id: '1',
@@ -27,45 +31,53 @@ jest.mock('../../contexts/AuthContext', () => ({
   }),
 }));
 
-jest.mock('../../components/flow/FlowCanvas', () => {
-  const React = require('react');
+vi.mock('../../components/flow/FlowCanvas', async () => {
+  const React = (await import('react'));
   return {
     // Holds its own models like the real canvas, so a replaced canvas starts empty.
     FlowCanvas: React.forwardRef((props: any, ref: any) => {
       const [nodes, setNodes] = React.useState([]);
       const [viewport, setViewport] = React.useState(props.initialViewport ?? { x: 0, y: 0, zoom: 1 });
+      const [locked, setLocked] = React.useState(props.initialLocked ?? false);
       React.useImperativeHandle(ref, () => ({
+        isLocked: () => locked,
         loadDiagramData: (nextNodes: any[]) => setNodes(nextNodes),
         getNodes: () => nodes,
         getViewport: () => viewport,
-        getEdges: jest.fn(() => []),
-        addEcoreFile: jest.fn(),
-        updateEcoreFileData: jest.fn(),
-        resetExpandedFile: jest.fn(),
-        undo: jest.fn(),
-        redo: jest.fn(),
+        getEdges: vi.fn(() => []),
+        addEcoreFile: vi.fn(),
+        updateEcoreFileData: vi.fn(),
+        resetExpandedFile: vi.fn(),
+        undo: vi.fn(),
+        redo: vi.fn(),
         canUndo: false,
         canRedo: false,
-        getReactionEdges: jest.fn(() => []),
-        getViewTypes: jest.fn(() => []),
-        getWorkspaceSnapshot: jest.fn(() => ({
+        getReactionEdges: vi.fn(() => []),
+        getViewTypes: vi.fn(() => []),
+        getWorkspaceSnapshot: vi.fn(() => ({
           metaModelIds: [],
           metaModelRelationRequests: [],
         })),
-        fitUmlView: jest.fn(),
-        openSelectedReactionEditor: jest.fn(() => false),
-      }), [nodes, viewport]);
+        fitUmlView: vi.fn(),
+        openSelectedReactionEditor: vi.fn(() => false),
+        openReactionFileAt: mockOpenReactionFileAt,
+        openMetaModelFile: mockOpenMetaModelFile,
+      }), [nodes, viewport, locked]);
       return (
         <div data-testid="flow-canvas">
           {props.projectTabsBelowModeToggle}
           {nodes.map((node: any) => <span key={node.id}>{node.id}</span>)}
           <span data-testid="canvas-viewport">{`${viewport.x},${viewport.y},${viewport.zoom}`}</span>
+          <span data-testid="canvas-locked">{String(locked)}</span>
           {/* Like a model card, which stops every key event while it has the focus. */}
           <div role="button" tabIndex={0} onKeyDown={(e: any) => e.stopPropagation()}>
             Test model card
           </div>
           <button type="button" onClick={() => setViewport({ x: 120, y: 80, zoom: 1.5 })}>
             Pan test canvas
+          </button>
+          <button type="button" onClick={() => setLocked(true)}>
+            Lock test canvas
           </button>
           <button
             type="button"
@@ -79,26 +91,27 @@ jest.mock('../../components/flow/FlowCanvas', () => {
   };
 });
 
-jest.mock('../../components/constraints/ConstraintsView', () => ({
+vi.mock('../../components/constraints/ConstraintsView', () => ({
   ConstraintsView: () => <div data-testid="constraints-view" />,
 }));
 
-jest.mock('../../services/api', () => ({
+vi.mock('../../services/api', () => ({
   apiService: {
-    getVsumDetails: jest.fn(),
-    getVsum: jest.fn(),
-    getVsumMembers: jest.fn(),
-    getVsumsPaginated: jest.fn(),
-    findMetaModels: jest.fn(),
-    getRuleSets: jest.fn().mockResolvedValue([]),
-    getFile: jest.fn(),
-    removeVsumMember: jest.fn(),
-    buildVsum: jest.fn(),
-    downloadVsumArtifact: jest.fn(),
-    downloadVsumBundle: jest.fn(),
-    renameVsum: jest.fn(),
-    deleteMetaModel: jest.fn(),
-    syncVsumChanges: jest.fn(),
+    getVsumDetails: vi.fn(),
+    getVsum: vi.fn(),
+    getVsumMembers: vi.fn(),
+    getVsumsPaginated: vi.fn(),
+    findMetaModels: vi.fn(),
+    getRuleSets: vi.fn().mockResolvedValue([]),
+    getFile: vi.fn(),
+    removeVsumMember: vi.fn(),
+    buildVsum: vi.fn(),
+    downloadVsumProject: vi.fn(),
+    downloadVsumJar: vi.fn(),
+    downloadVsumBundle: vi.fn(),
+    renameVsum: vi.fn(),
+    deleteMetaModel: vi.fn(),
+    syncVsumChanges: vi.fn(),
   },
 }));
 
@@ -112,16 +125,16 @@ const apiError = (status: number, message: string) =>
   });
 
 describe('CanvasPage invalid project routes', () => {
-  let consoleErrorSpy: jest.SpyInstance | undefined;
+  let consoleErrorSpy: MockInstance | undefined;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockRouteId = '10';
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    (apiService.findMetaModels as jest.Mock).mockResolvedValue({ data: [] });
-    (apiService.getVsumMembers as jest.Mock).mockResolvedValue({ data: [] });
-    (apiService.getVsum as jest.Mock).mockResolvedValue({ data: {} });
-    (apiService.getVsumsPaginated as jest.Mock).mockResolvedValue({ data: [] });
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    (apiService.findMetaModels as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumMembers as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsum as Mock).mockResolvedValue({ data: {} });
+    (apiService.getVsumsPaginated as Mock).mockResolvedValue({ data: [] });
   });
 
   afterEach(() => {
@@ -129,7 +142,7 @@ describe('CanvasPage invalid project routes', () => {
   });
 
   it('shows access denied and removes the canvas when details returns 403', async () => {
-    (apiService.getVsumDetails as jest.Mock).mockRejectedValueOnce(
+    (apiService.getVsumDetails as Mock).mockRejectedValueOnce(
       apiError(403, 'Forbidden'),
     );
 
@@ -145,7 +158,7 @@ describe('CanvasPage invalid project routes', () => {
 
   it('shows not found and removes the canvas when details returns 404', async () => {
     mockRouteId = '100';
-    (apiService.getVsumDetails as jest.Mock).mockRejectedValueOnce(
+    (apiService.getVsumDetails as Mock).mockRejectedValueOnce(
       apiError(404, 'Not found'),
     );
 
@@ -179,13 +192,13 @@ describe('CanvasPage project tabs', () => {
     .map(model => model.textContent);
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockRouteId = '10';
-    (apiService.findMetaModels as jest.Mock).mockResolvedValue({ data: [] });
-    (apiService.getVsumMembers as jest.Mock).mockResolvedValue({ data: [] });
-    (apiService.getVsum as jest.Mock).mockResolvedValue({ data: {} });
-    (apiService.getVsumsPaginated as jest.Mock).mockResolvedValue({ data: [] });
-    (apiService.getVsumDetails as jest.Mock).mockImplementation((vsumId: number) => Promise.resolve(
+    (apiService.findMetaModels as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumMembers as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsum as Mock).mockResolvedValue({ data: {} });
+    (apiService.getVsumsPaginated as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumDetails as Mock).mockImplementation((vsumId: number) => Promise.resolve(
       vsumId === 10 ? vsumDetails(10, 'Project A') : vsumDetails(20, 'Project B'),
     ));
   });
@@ -227,6 +240,24 @@ describe('CanvasPage project tabs', () => {
     fireEvent.click(screen.getByRole('tab', { name: /Project B/ }));
     await waitFor(() => expect(viewport()).toBe('0,0,1'));
   });
+
+  it('keeps the lock of every tab when switching between project tabs', async () => {
+    const locked = () => screen.getByTestId('canvas-locked').textContent;
+    const { rerender } = render(<CanvasPage />);
+    await waitForProject('Project A');
+    fireEvent.click(screen.getByRole('button', { name: 'Lock test canvas' }));
+
+    mockRouteId = '20';
+    rerender(<CanvasPage />);
+    await waitForProject('Project B');
+    expect(locked()).toBe('false');
+
+    fireEvent.click(screen.getByRole('tab', { name: /Project A/ }));
+    await waitFor(() => expect(locked()).toBe('true'));
+
+    fireEvent.click(screen.getByRole('tab', { name: /Project B/ }));
+    await waitFor(() => expect(locked()).toBe('false'));
+  });
 });
 
 describe('CanvasPage save shortcut', () => {
@@ -236,14 +267,14 @@ describe('CanvasPage save shortcut', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockRouteId = '10';
-    (apiService.findMetaModels as jest.Mock).mockResolvedValue({ data: [] });
-    (apiService.getVsumMembers as jest.Mock).mockResolvedValue({ data: [] });
-    (apiService.getVsum as jest.Mock).mockResolvedValue({ data: {} });
-    (apiService.getVsumsPaginated as jest.Mock).mockResolvedValue({ data: [] });
-    (apiService.getVsumDetails as jest.Mock).mockResolvedValue(vsumDetails(10, 'Project A'));
-    (apiService.syncVsumChanges as jest.Mock).mockResolvedValue({ data: { message: 'Saved' } });
+    (apiService.findMetaModels as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumMembers as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsum as Mock).mockResolvedValue({ data: {} });
+    (apiService.getVsumsPaginated as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumDetails as Mock).mockResolvedValue(vsumDetails(10, 'Project A'));
+    (apiService.syncVsumChanges as Mock).mockResolvedValue({ data: { message: 'Saved' } });
   });
 
   it('saves the project with Cmd+S instead of opening the browser dialog', async () => {
@@ -254,7 +285,7 @@ describe('CanvasPage save shortcut', () => {
 
     expect(notPrevented).toBe(false);
     await waitFor(() => expect(apiService.syncVsumChanges).toHaveBeenCalledTimes(1));
-    expect((apiService.syncVsumChanges as jest.Mock).mock.calls[0][0]).toBe(10);
+    expect((apiService.syncVsumChanges as Mock).mock.calls[0][0]).toBe(10);
   });
 
   it('saves the project with Cmd+S while a model on the canvas has the focus', async () => {
@@ -282,5 +313,198 @@ describe('CanvasPage save shortcut', () => {
 
     expect(notPrevented).toBe(false);
     expect(apiService.syncVsumChanges).not.toHaveBeenCalled();
+  });
+});
+
+describe('CanvasPage build check', () => {
+  const checkBuild = () =>
+    fireEvent.click(screen.getByRole('button', { name: /Check build/ }));
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRouteId = '10';
+    (apiService.findMetaModels as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumMembers as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsum as Mock).mockResolvedValue({ data: {} });
+    (apiService.getVsumsPaginated as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumDetails as Mock).mockResolvedValue(vsumDetails(10, 'Project A'));
+  });
+
+  it('reports the constraint rule sets built into the VSUM', async () => {
+    (apiService.buildVsum as Mock).mockResolvedValue({
+      data: { constraintRuleSets: ['Komponenten', 'Preise'] },
+      message: 'The build was successful.',
+    });
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+
+    checkBuild();
+
+    expect(
+      await screen.findByText(
+        'This VSUM can be built. It includes 2 constraint rule sets: Komponenten, Preise.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('explains build failures caused by constraints', async () => {
+    (apiService.buildVsum as Mock).mockRejectedValue(
+      apiError(500, 'Constraint file Preise.ocl refers to unknown metamodel(s) [shop]'),
+    );
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+
+    checkBuild();
+
+    const popup = await screen.findByTestId('canvas-popup-notification');
+    await waitFor(() => expect(popup).toHaveTextContent(/The constraints could not be built/));
+    expect(popup).toHaveTextContent(/Rule set "Preise" refers to unknown metamodel/);
+  });
+
+  it('opens Constraints mode from a build failure caused by constraints', async () => {
+    (apiService.buildVsum as Mock).mockRejectedValue(
+      apiError(500, 'Constraint file Preise.ocl refers to unknown metamodel(s) [shop]'),
+    );
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+    checkBuild();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Constraints mode' }));
+
+    expect(await screen.findByTestId('constraints-view')).toBeInTheDocument();
+    expect(screen.queryByTestId('canvas-popup-notification')).not.toBeInTheDocument();
+    // the mode is remembered per project, so later tests would start in Constraints mode
+    localStorage.removeItem(canvasModeStorageKey(10));
+  });
+
+  it('offers no jump to Constraints mode for other build failures', async () => {
+    (apiService.buildVsum as Mock).mockRejectedValue(
+      apiError(500, 'Maven build failed with exit code 1'),
+    );
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+    checkBuild();
+
+    await screen.findByText('Maven build failed with exit code 1');
+    expect(screen.queryByRole('button', { name: 'Open Constraints mode' })).not.toBeInTheDocument();
+  });
+
+  it('shows other build failures unchanged', async () => {
+    (apiService.buildVsum as Mock).mockRejectedValue(
+      apiError(500, 'Maven build failed with exit code 1'),
+    );
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+
+    checkBuild();
+
+    expect(await screen.findByText('Maven build failed with exit code 1')).toBeInTheDocument();
+    expect(screen.queryByText(/The constraints could not be built/)).not.toBeInTheDocument();
+  });
+
+  it('shows structured build problems in the problems dialog instead of the popup', async () => {
+    (apiService.buildVsum as Mock).mockRejectedValue(Object.assign(new Error('Reactions do not match'), {
+      response: {
+        status: 422,
+        data: {
+          message: 'Reactions do not match',
+          errorCode: 'VSUM_REACTIONS_ERROR',
+          problems: [{ source: 'REACTIONS', file: 'my.reactions', fileId: 7, line: 3, message: 'Unknown EClass' }],
+        },
+      },
+    }));
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+
+    checkBuild();
+
+    const dialog = await screen.findByRole('dialog', { name: 'Build check failed' });
+    expect(within(dialog).getByText('my.reactions')).toBeInTheDocument();
+    expect(screen.queryByTestId('canvas-popup-notification')).not.toBeInTheDocument();
+  });
+});
+
+describe('CanvasPage build problems', () => {
+  const reactionProblem = {
+    source: 'REACTIONS',
+    file: 'my.reactions',
+    fileId: 7,
+    line: 51,
+    column: 30,
+    message: "Couldn't resolve reference to EClass 'Foo'.",
+  };
+
+  const exportJar = async () => {
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+    fireEvent.click(screen.getByRole('button', { name: /^Download\./ }));
+    fireEvent.click(screen.getByRole('button', { name: /Runnable JAR/ }));
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRouteId = '10';
+    (apiService.findMetaModels as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumMembers as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsum as Mock).mockResolvedValue({ data: {} });
+    (apiService.getVsumsPaginated as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumDetails as Mock).mockResolvedValue(vsumDetails(10, 'Project A'));
+    mockOpenReactionFileAt.mockReturnValue(true);
+    mockOpenMetaModelFile.mockReturnValue(true);
+  });
+
+  it('shows the problems of a failed JAR export and opens a reaction file at the line', async () => {
+    (apiService.downloadVsumJar as Mock).mockRejectedValueOnce(Object.assign(new Error('Reactions do not match'), {
+      response: {
+        status: 422,
+        data: { message: 'Reactions do not match', errorCode: 'VSUM_REACTIONS_ERROR', problems: [reactionProblem] },
+      },
+    }));
+
+    await exportJar();
+
+    const dialog = await screen.findByRole('dialog', { name: 'Runnable JAR export failed' });
+    expect(within(dialog).getByText('my.reactions')).toBeInTheDocument();
+    expect(screen.queryByTestId('canvas-popup-notification')).not.toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /Open at line 51/ }));
+
+    expect(mockOpenReactionFileAt).toHaveBeenCalledWith(7, { lineNumber: 51, column: 30 });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('opens the metamodel of a metamodel problem and keeps the dialog if it is not on the canvas', async () => {
+    mockOpenMetaModelFile.mockReturnValue(false);
+    (apiService.downloadVsumProject as Mock).mockRejectedValueOnce(Object.assign(new Error('Bad metamodel'), {
+      response: {
+        data: {
+          message: 'Bad metamodel',
+          errorCode: 'VSUM_METAMODEL_ERROR',
+          problems: [{ source: 'METAMODEL', file: 'families.ecore', fileId: 11, message: 'No nsURI' }],
+        },
+      },
+    }));
+
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+    fireEvent.click(screen.getByRole('button', { name: /^Download\./ }));
+    fireEvent.click(screen.getByRole('button', { name: /Project export/ }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Project export failed' });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Open file/ }));
+
+    expect(mockOpenMetaModelFile).toHaveBeenCalledWith(11);
+    expect(within(dialog).getByRole('status')).toHaveTextContent('families.ecore is not on the canvas');
+  });
+
+  it('keeps the error popup for failures without problems', async () => {
+    (apiService.downloadVsumJar as Mock).mockRejectedValueOnce(Object.assign(new Error('Build failed'), {
+      response: { data: { message: 'Build failed' } },
+    }));
+
+    await exportJar();
+
+    expect(await screen.findByTestId('canvas-popup-notification')).toHaveTextContent('Build failed');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

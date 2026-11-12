@@ -39,7 +39,7 @@ const makeNode = (id: string, label: string): Node => ({
   id,
   type: 'editable',
   position: { x: 0, y: 0 },
-  data: { label, onLabelChange: jest.fn() },
+  data: { label, onLabelChange: vi.fn() },
 });
 
 const makeEdge = (id: string, source: string, target: string): Edge => ({

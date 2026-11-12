@@ -15,10 +15,10 @@ interface MockCanvasAccountMenuProps {
   onCloseSiblingMenu: () => void;
 }
 
-const mockAccountMenuProps = jest.fn();
-const mockPeopleAccessPanelProps = jest.fn();
+const mockAccountMenuProps = vi.fn();
+const mockPeopleAccessPanelProps = vi.fn();
 
-jest.mock('../../../components/canvas/CanvasAccountMenu', () => ({
+vi.mock('../../../components/canvas/CanvasAccountMenu', () => ({
   CanvasAccountMenu: (props: MockCanvasAccountMenuProps) => {
     mockAccountMenuProps(props);
     return (
@@ -29,7 +29,7 @@ jest.mock('../../../components/canvas/CanvasAccountMenu', () => ({
   },
 }));
 
-jest.mock('../../../components/canvas/CanvasPeopleAccessPanel', () => ({
+vi.mock('../../../components/canvas/CanvasPeopleAccessPanel', () => ({
   CanvasPeopleAccessPanel: (props: CanvasPeopleAccessPanelProps) => {
     mockPeopleAccessPanelProps(props);
     const removableMember = props.panelMembers.find(member => member.role !== 'OWNER')
@@ -83,9 +83,9 @@ const renderControls = (
     membersLoading: false,
     currentUserEmail: 'ahmed@example.com',
     currentUserName: 'Ahmed Ibrahim',
-    onRefreshMembers: jest.fn(),
-    onRemoveMember: jest.fn(),
-    onShareClick: jest.fn(),
+    onRefreshMembers: vi.fn(),
+    onRemoveMember: vi.fn(),
+    onShareClick: vi.fn(),
     ...overrides,
   };
 
@@ -106,7 +106,7 @@ const latestPeoplePanelProps = (): CanvasPeopleAccessPanelProps => {
 };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('CanvasProjectAccessControls', () => {
@@ -148,7 +148,7 @@ describe('CanvasProjectAccessControls', () => {
   });
 
   it('opens the people panel, refreshes members, and forwards panel close', () => {
-    const onRefreshMembers = jest.fn();
+    const onRefreshMembers = vi.fn();
     renderControls({ onRefreshMembers });
 
     const stackButton = screen.getByRole('button', { name: 'People with access' });
@@ -165,7 +165,7 @@ describe('CanvasProjectAccessControls', () => {
   });
 
   it('shows the share button only when allowed and forwards share clicks', () => {
-    const onShareClick = jest.fn();
+    const onShareClick = vi.fn();
     const { rerender, props } = renderControls({
       canShare: false,
       onShareClick,
@@ -185,9 +185,9 @@ describe('CanvasProjectAccessControls', () => {
   });
 
   it('forwards expected project data and callbacks to the people panel', () => {
-    const onRefreshMembers = jest.fn();
-    const onRemoveMember = jest.fn();
-    const onShareClick = jest.fn();
+    const onRefreshMembers = vi.fn();
+    const onRemoveMember = vi.fn();
+    const onShareClick = vi.fn();
     renderControls({
       projectMembers: [owner, member],
       projectSharer: owner,
@@ -228,7 +228,7 @@ describe('CanvasProjectAccessControls', () => {
     const removalPromise = new Promise<void>(resolve => {
       resolveRemoval = resolve;
     });
-    const onRemoveMember = jest.fn(() => removalPromise);
+    const onRemoveMember = vi.fn(() => removalPromise);
     renderControls({
       projectMembers: [owner, member],
       onRemoveMember,
@@ -259,7 +259,7 @@ describe('CanvasProjectAccessControls', () => {
   });
 
   it('cancels removal without invoking the supplied callback', () => {
-    const onRemoveMember = jest.fn();
+    const onRemoveMember = vi.fn();
     renderControls({
       projectMembers: [owner, member],
       onRemoveMember,

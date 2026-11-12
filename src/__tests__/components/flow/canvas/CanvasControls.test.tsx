@@ -5,10 +5,10 @@ import { CanvasControls } from '../../../../components/flow/canvas/CanvasControl
 describe('CanvasControls', () => {
   const setup = (props: Partial<React.ComponentProps<typeof CanvasControls>> = {}) => {
     const handlers = {
-      onZoomIn: jest.fn(),
-      onZoomOut: jest.fn(),
-      onFitView: jest.fn(),
-      onToggleInteractive: jest.fn(),
+      onZoomIn: vi.fn(),
+      onZoomOut: vi.fn(),
+      onFitView: vi.fn(),
+      onToggleInteractive: vi.fn(),
     };
     render(
       <CanvasControls {...handlers} isInteractive readOnly={false} {...props} />,

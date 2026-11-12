@@ -273,7 +273,7 @@ describe('useViewTypes', () => {
     });
 
     it('does not persist when vsumId is undefined', () => {
-        const setItemSpy = jest.spyOn(localStorageMock, 'setItem');
+        const setItemSpy = vi.spyOn(localStorageMock, 'setItem');
         const { result } = renderHook(() => useViewTypes(undefined));
         act(() => { result.current.addViewType(makeViewType()); });
         expect(setItemSpy).not.toHaveBeenCalled();

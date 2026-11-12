@@ -82,6 +82,73 @@ describe('umlToEcore', () => {
     expect(xml).toContain('upperBound="-1"');
   });
 
+  describe('association multiplicity round trip', () => {
+    function roundTripMultiplicity(
+      sourceMultiplicity: string | undefined,
+      targetMultiplicity: string | undefined,
+    ) {
+      const model = ecoreToUml(SAMPLE);
+      model.relationships.push({
+        id: 'rel-new',
+        sourceId: model.classes.find(c => c.name === 'Person')!.id,
+        targetId: model.classes.find(c => c.name === 'Employee')!.id,
+        type: 'association',
+        label: 'manager',
+        sourceMultiplicity,
+        targetMultiplicity,
+      });
+      const xml = umlToEcore(model, SAMPLE);
+      const saved = ecoreToUml(xml).relationships.find(r => r.label === 'manager')!;
+      return { xml, saved, again: ecoreToUml(umlToEcore(ecoreToUml(xml), xml)) };
+    }
+
+    it.each([
+      ['0..*', '1'],
+      ['1', '0..*'],
+      ['1..*', '0..1'],
+      ['0..1', '1..*'],
+      ['*', '*'],
+      ['*', '0..*'],
+      ['2..5', '3'],
+      [undefined, '1'],
+      ['0..*', undefined],
+      [undefined, undefined],
+    ])('keeps source %s and target %s after saving and reloading', (source, target) => {
+      const { saved, again } = roundTripMultiplicity(source, target);
+      expect(saved.sourceMultiplicity).toBe(source);
+      expect(saved.targetMultiplicity).toBe(target);
+      const savedAgain = again.relationships.find(r => r.label === 'manager')!;
+      expect(savedAgain.sourceMultiplicity).toBe(source);
+      expect(savedAgain.targetMultiplicity).toBe(target);
+    });
+
+    it('writes a valid upper bound for "*" and omits bounds for a cleared target', () => {
+      expect(roundTripMultiplicity('1', '*').xml).toContain('lowerBound="0" upperBound="-1"');
+      const referenceTag = /<eStructuralFeatures[^>]*EReference[^>]*>/.exec(
+        roundTripMultiplicity('1', undefined).xml,
+      )![0];
+      expect(referenceTag).not.toContain('lowerBound');
+      expect(referenceTag).not.toContain('upperBound');
+    });
+
+    it('does not add an annotation when the ends match what Ecore bounds imply', () => {
+      expect(roundTripMultiplicity('1', '0..*').xml).not.toContain('uml.multiplicity');
+    });
+
+    it('prefers the Ecore bounds over a stale target annotation', () => {
+      const ecore = `<ecore:EPackage xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="p">
+        <eClassifiers xsi:type="ecore:EClass" name="A">
+          <eStructuralFeatures xsi:type="ecore:EReference" name="b" eType="#//B" lowerBound="1" upperBound="1">
+            <eAnnotations source="uml.multiplicity"><details key="target" value="*"/></eAnnotations>
+          </eStructuralFeatures>
+        </eClassifiers>
+        <eClassifiers xsi:type="ecore:EClass" name="B"/>
+      </ecore:EPackage>`;
+      expect(ecoreToUml(ecore).relationships[0].targetMultiplicity).toBe('1');
+    });
+  });
+
   it('umlSemanticSnapshot ignores layout coordinates', () => {
     const model = ecoreToUml(SAMPLE);
     const a = umlSemanticSnapshot(model);

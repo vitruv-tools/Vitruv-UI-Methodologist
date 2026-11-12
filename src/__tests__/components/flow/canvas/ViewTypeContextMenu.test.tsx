@@ -17,8 +17,8 @@ const defaultProps = (overrides?: any) => ({
     x: 100,
     y: 200,
     ecoreNodes: [makeNode()],
-    onAdd: jest.fn(),
-    onClose: jest.fn(),
+    onAdd: vi.fn(),
+    onClose: vi.fn(),
     ...overrides,
 });
 
@@ -36,7 +36,7 @@ const clickAdd = () =>
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('ViewTypeContextMenu', () => {
-    beforeEach(() => jest.clearAllMocks());
+    beforeEach(() => vi.clearAllMocks());
 
     // Rendering
 
@@ -106,7 +106,7 @@ describe('ViewTypeContextMenu', () => {
     // onAdd behavior
 
     it('calls onAdd with correct args when Add is clicked', () => {
-        const onAdd = jest.fn();
+        const onAdd = vi.fn();
         renderMenu({ onAdd });
         fillLabel('VT1');
         clickNode('test.ecore');
@@ -115,7 +115,7 @@ describe('ViewTypeContextMenu', () => {
     });
 
     it('calls onAdd with editable=true when checkbox is checked', () => {
-        const onAdd = jest.fn();
+        const onAdd = vi.fn();
         renderMenu({ onAdd });
         fillLabel('VT1');
         clickNode('test.ecore');
@@ -125,7 +125,7 @@ describe('ViewTypeContextMenu', () => {
     });
 
     it('trims whitespace from label before calling onAdd', () => {
-        const onAdd = jest.fn();
+        const onAdd = vi.fn();
         renderMenu({ onAdd });
         fillLabel('  VT1  ');
         clickNode('test.ecore');
@@ -134,7 +134,7 @@ describe('ViewTypeContextMenu', () => {
     });
 
     it('calls onClose after successful add', () => {
-        const onClose = jest.fn();
+        const onClose = vi.fn();
         renderMenu({ onClose });
         fillLabel('VT1');
         clickNode('test.ecore');
@@ -143,7 +143,7 @@ describe('ViewTypeContextMenu', () => {
     });
 
     it('does not call onAdd when Add is clicked with empty label', () => {
-        const onAdd = jest.fn();
+        const onAdd = vi.fn();
         renderMenu({ onAdd });
         clickNode('test.ecore');
         clickAdd();
@@ -151,7 +151,7 @@ describe('ViewTypeContextMenu', () => {
     });
 
     it('submits on Enter key in label input', () => {
-        const onAdd = jest.fn();
+        const onAdd = vi.fn();
         renderMenu({ onAdd });
         fillLabel('VT1');
         clickNode('test.ecore');
@@ -160,7 +160,7 @@ describe('ViewTypeContextMenu', () => {
     });
 
     it('does not submit on Enter when form is incomplete', () => {
-        const onAdd = jest.fn();
+        const onAdd = vi.fn();
         renderMenu({ onAdd });
         fillLabel('VT1');
         // no node selected
@@ -194,7 +194,7 @@ describe('ViewTypeContextMenu', () => {
     });
 
     it('single scope only allows one node selected at a time', () => {
-        const onAdd = jest.fn();
+        const onAdd = vi.fn();
         renderMenu({
             onAdd,
             ecoreNodes: [
@@ -210,7 +210,7 @@ describe('ViewTypeContextMenu', () => {
     });
 
     it('multi scope allows multiple nodes selected', () => {
-        const onAdd = jest.fn();
+        const onAdd = vi.fn();
         renderMenu({
             onAdd,
             ecoreNodes: [
@@ -227,7 +227,7 @@ describe('ViewTypeContextMenu', () => {
     });
 
     it('deselects a node in multi scope when clicked again', () => {
-        const onAdd = jest.fn();
+        const onAdd = vi.fn();
         renderMenu({
             onAdd,
             ecoreNodes: [
@@ -245,7 +245,7 @@ describe('ViewTypeContextMenu', () => {
     });
 
     it('resets node selection when scope changes', () => {
-        const onAdd = jest.fn();
+        const onAdd = vi.fn();
         renderMenu({ onAdd });
         fillLabel('VT1');
         clickNode('test.ecore');
@@ -258,7 +258,7 @@ describe('ViewTypeContextMenu', () => {
     // onClose
 
     it('calls onClose when backdrop is clicked', () => {
-        const onClose = jest.fn();
+        const onClose = vi.fn();
         render(<ViewTypeContextMenu {...defaultProps({ onClose })} />);
         const backdrop = document.body.querySelector('button[aria-label="Close menu"]') as HTMLElement;
         fireEvent.click(backdrop);
@@ -266,7 +266,7 @@ describe('ViewTypeContextMenu', () => {
     });
 
     it('does not close when clicking inside the menu panel', () => {
-        const onClose = jest.fn();
+        const onClose = vi.fn();
         renderMenu({ onClose });
         fireEvent.click(screen.getByText('Add View Type'));
         expect(onClose).not.toHaveBeenCalled();

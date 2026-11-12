@@ -249,7 +249,7 @@ const ShareBtn: React.FC<{ onClick: () => void }> = ({ onClick }) => {
   return (
     <button
       type="button"
-      title="Share project — invite viewers by email"
+      title="Share project — add viewers or members"
       onClick={onClick}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}

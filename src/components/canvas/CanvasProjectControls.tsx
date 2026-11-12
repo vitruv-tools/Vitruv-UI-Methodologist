@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ProjectPickerMenu } from './ProjectPickerMenu';
+import { VsumLineStyleMenu } from './VsumLineStyleMenu';
 
 interface CanvasProjectControlsProps {
   readOnly?: boolean;
@@ -22,6 +23,9 @@ interface CanvasProjectControlsProps {
   onToggleReactionMode?: () => void;
   reactionLineStyle?: 'dashed' | 'solid';
   onReactionLineStyleChange?: (style: 'dashed' | 'solid') => void;
+  /** Number of validation problems; the counter is hidden when 0 or omitted. */
+  validationProblemCount?: number;
+  onShowValidationProblems?: () => void;
 }
 
 const projectControlsStyle: React.CSSProperties = {
@@ -146,6 +150,8 @@ export const CanvasProjectControls: React.FC<CanvasProjectControlsProps> = ({
   onToggleReactionMode,
   reactionLineStyle = 'dashed',
   onReactionLineStyleChange,
+  validationProblemCount = 0,
+  onShowValidationProblems,
 }) => (
   <div style={projectControlsStyle}>
     <button
@@ -172,7 +178,7 @@ export const CanvasProjectControls: React.FC<CanvasProjectControlsProps> = ({
       onMouseLeave={event => { event.currentTarget.style.opacity = '1'; }}
     >
       <img
-        src="/assets/vitruvius1.png"
+        src={`${process.env.PUBLIC_URL}/assets/vitruvius1.png`}
         alt=""
         aria-hidden="true"
         style={{ width: 24, height: 24, borderRadius: 6, display: 'block' }}
@@ -260,29 +266,63 @@ export const CanvasProjectControls: React.FC<CanvasProjectControlsProps> = ({
       <RefreshIcon />
     </ProjectControlButton>
 
+    {validationProblemCount > 0 && (
+      <button
+        type="button"
+        onClick={onShowValidationProblems}
+        title="Show problems in this project"
+        data-testid="validation-problem-counter"
+        style={{
+          height: 24,
+          marginLeft: 4,
+          padding: '0 8px',
+          border: '1px solid #fecaca',
+          borderRadius: 6,
+          background: '#fef2f2',
+          color: '#b91c1c',
+          fontSize: 11,
+          fontWeight: 700,
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+          fontFamily: 'inherit',
+        }}
+      >
+        {validationProblemCount === 1 ? '1 problem' : `${validationProblemCount} problems`}
+      </button>
+    )}
+
     {onToggleReactionMode && (
       <>
         <ProjectControlsDivider />
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '0 4px' }}>
-          <button
-            type="button"
-            onClick={() => { if (addReactionMode) onToggleReactionMode(); }}
-            style={{
-              height: 24,
-              padding: '0 8px',
-              border: 'none',
-              borderRadius: 4,
-              fontSize: 10,
-              fontWeight: 700,
-              cursor: 'pointer',
-              background: !addReactionMode ? '#e3f2fd' : 'transparent',
-              color: !addReactionMode ? '#1565c0' : '#999',
-              transition: 'all 0.15s',
-              fontFamily: 'inherit',
-            }}
+          <VsumLineStyleMenu
+            lineStyle={reactionLineStyle}
+            onLineStyleChange={onReactionLineStyleChange}
+            opensOnActivate={!addReactionMode}
           >
-            VSUM
-          </button>
+            {(menuButtonProps) => (
+              <button
+                type="button"
+                {...menuButtonProps}
+                onClick={() => { if (addReactionMode) onToggleReactionMode(); }}
+                style={{
+                  height: 24,
+                  padding: '0 8px',
+                  border: 'none',
+                  borderRadius: 4,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: !addReactionMode ? '#e3f2fd' : 'transparent',
+                  color: !addReactionMode ? '#1565c0' : '#999',
+                  transition: 'all 0.15s',
+                  fontFamily: 'inherit',
+                }}
+              >
+                VSUM
+              </button>
+            )}
+          </VsumLineStyleMenu>
           <button
             type="button"
             onClick={() => { if (!addReactionMode) onToggleReactionMode(); }}
@@ -303,50 +343,6 @@ export const CanvasProjectControls: React.FC<CanvasProjectControlsProps> = ({
             Reactions
           </button>
         </div>
-        {addReactionMode && onReactionLineStyleChange && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '0 4px' }}>
-            <button
-              type="button"
-              aria-pressed={reactionLineStyle === 'dashed'}
-              onClick={() => onReactionLineStyleChange('dashed')}
-              style={{
-                height: 24,
-                padding: '0 8px',
-                border: 'none',
-                borderRadius: 4,
-                fontSize: 10,
-                fontWeight: 700,
-                cursor: 'pointer',
-                background: reactionLineStyle === 'dashed' ? '#e8f5e9' : 'transparent',
-                color: reactionLineStyle === 'dashed' ? '#2e7d32' : '#999',
-                transition: 'all 0.15s',
-                fontFamily: 'inherit',
-              }}
-            >
-              Dashed
-            </button>
-            <button
-              type="button"
-              aria-pressed={reactionLineStyle === 'solid'}
-              onClick={() => onReactionLineStyleChange('solid')}
-              style={{
-                height: 24,
-                padding: '0 8px',
-                border: 'none',
-                borderRadius: 4,
-                fontSize: 10,
-                fontWeight: 700,
-                cursor: 'pointer',
-                background: reactionLineStyle === 'solid' ? '#e8f5e9' : 'transparent',
-                color: reactionLineStyle === 'solid' ? '#2e7d32' : '#999',
-                transition: 'all 0.15s',
-                fontFamily: 'inherit',
-              }}
-            >
-              Solid
-            </button>
-          </div>
-        )}
       </>
     )}
   </div>

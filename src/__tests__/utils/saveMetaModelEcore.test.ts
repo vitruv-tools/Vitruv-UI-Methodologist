@@ -1,16 +1,17 @@
+import type { Mock } from 'vitest';
 import { apiService } from '../../services/api';
 
 import { ecoreToUml } from '../../utils/ecoreToUml';
 
 import { saveMetaModelEcore } from '../../utils/saveMetaModelEcore';
 
-jest.mock('../../services/api', () => ({
+vi.mock('../../services/api', () => ({
   apiService: {
-    updateEcoreFile: jest.fn(),
-    uploadFile: jest.fn(),
-    getMetaModel: jest.fn(),
-    getMetaModels: jest.fn(),
-    updateMetaModel: jest.fn(),
+    updateEcoreFile: vi.fn(),
+    uploadFile: vi.fn(),
+    getMetaModel: vi.fn(),
+    getMetaModels: vi.fn(),
+    updateMetaModel: vi.fn(),
   },
 }));
 
@@ -30,12 +31,12 @@ const META = {
 
 describe('saveMetaModelEcore', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
-  afterEach(() => jest.clearAllMocks());
+  afterEach(() => vi.clearAllMocks());
 
   it('overwrites the existing ecore file in place when update is supported', async () => {
-    (apiService.updateEcoreFile as jest.Mock).mockResolvedValueOnce({});
+    (apiService.updateEcoreFile as Mock).mockResolvedValueOnce({});
 
     const model = ecoreToUml(SAMPLE);
     const result = await saveMetaModelEcore({
@@ -50,12 +51,12 @@ describe('saveMetaModelEcore', () => {
     expect(apiService.uploadFile).not.toHaveBeenCalled();
     expect(result.ecoreFileId).toBe(7);
     expect(result.ecoreContent).toContain('name="Person"');
-    const uploaded = (apiService.updateEcoreFile as jest.Mock).mock.calls[0][1] as File;
+    const uploaded = (apiService.updateEcoreFile as Mock).mock.calls[0][1] as File;
     expect(uploaded.name).toMatch(/^ecore-7-/);
   });
 
   it('retries update with another filename when the server reports a duplicate name', async () => {
-    (apiService.updateEcoreFile as jest.Mock)
+    (apiService.updateEcoreFile as Mock)
       .mockRejectedValueOnce(Object.assign(new Error('File already exists'), { status: 409 }))
       .mockResolvedValueOnce({});
 
@@ -74,12 +75,12 @@ describe('saveMetaModelEcore', () => {
   });
 
   it('uploads a new revision when update endpoint is missing', async () => {
-    (apiService.updateEcoreFile as jest.Mock).mockRejectedValue(
+    (apiService.updateEcoreFile as Mock).mockRejectedValue(
       Object.assign(new Error('Request failed with status 404'), { status: 404 }),
     );
-    (apiService.uploadFile as jest.Mock).mockResolvedValueOnce({ data: 99 });
-    (apiService.getMetaModel as jest.Mock).mockResolvedValueOnce({ data: META });
-    (apiService.updateMetaModel as jest.Mock).mockResolvedValueOnce({});
+    (apiService.uploadFile as Mock).mockResolvedValueOnce({ data: 99 });
+    (apiService.getMetaModel as Mock).mockResolvedValueOnce({ data: META });
+    (apiService.updateMetaModel as Mock).mockResolvedValueOnce({});
 
     const model = ecoreToUml(SAMPLE);
     const result = await saveMetaModelEcore({
@@ -91,18 +92,18 @@ describe('saveMetaModelEcore', () => {
     });
 
     expect(apiService.uploadFile).toHaveBeenCalledTimes(1);
-    const uploaded = (apiService.uploadFile as jest.Mock).mock.calls[0][0] as File;
+    const uploaded = (apiService.uploadFile as Mock).mock.calls[0][0] as File;
     expect(uploaded.name).toMatch(/^ecore-7-/);
     expect(apiService.getMetaModel).toHaveBeenCalledWith('42');
     expect(result.ecoreFileId).toBe(99);
   });
 
   it('relinks using caller metadata when GET /meta-models/{id} is unavailable', async () => {
-    (apiService.updateEcoreFile as jest.Mock).mockRejectedValue(
+    (apiService.updateEcoreFile as Mock).mockRejectedValue(
       Object.assign(new Error('Request failed with status 404'), { status: 404 }),
     );
-    (apiService.uploadFile as jest.Mock).mockResolvedValueOnce({ data: 101 });
-    (apiService.updateMetaModel as jest.Mock).mockResolvedValueOnce({});
+    (apiService.uploadFile as Mock).mockResolvedValueOnce({ data: 101 });
+    (apiService.updateMetaModel as Mock).mockResolvedValueOnce({});
 
     const model = ecoreToUml(SAMPLE);
     const result = await saveMetaModelEcore({
@@ -131,15 +132,15 @@ describe('saveMetaModelEcore', () => {
   });
 
   it('falls back to getMetaModels when getMetaModel returns 405', async () => {
-    (apiService.updateEcoreFile as jest.Mock).mockRejectedValue(
+    (apiService.updateEcoreFile as Mock).mockRejectedValue(
       Object.assign(new Error('Request failed with status 404'), { status: 404 }),
     );
-    (apiService.uploadFile as jest.Mock).mockResolvedValueOnce({ data: 102 });
-    (apiService.getMetaModel as jest.Mock).mockRejectedValue(
+    (apiService.uploadFile as Mock).mockResolvedValueOnce({ data: 102 });
+    (apiService.getMetaModel as Mock).mockRejectedValue(
       Object.assign(new Error('Method Not Allowed'), { status: 405 }),
     );
-    (apiService.getMetaModels as jest.Mock).mockResolvedValueOnce({ data: [{ id: 4, ...META }] });
-    (apiService.updateMetaModel as jest.Mock).mockResolvedValueOnce({});
+    (apiService.getMetaModels as Mock).mockResolvedValueOnce({ data: [{ id: 4, ...META }] });
+    (apiService.updateMetaModel as Mock).mockResolvedValueOnce({});
 
     const model = ecoreToUml(SAMPLE);
     const result = await saveMetaModelEcore({

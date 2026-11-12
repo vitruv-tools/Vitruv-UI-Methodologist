@@ -39,7 +39,7 @@ describe('CanvasUserAvatar', () => {
   });
 
   it('uses the supplied title as its accessible name and invokes its callback', () => {
-    const onClick = jest.fn();
+    const onClick = vi.fn();
     render(
       <CanvasUserAvatarButton
         initials="AI"

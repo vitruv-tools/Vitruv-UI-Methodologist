@@ -1,40 +1,42 @@
+import type { Mock } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CreateVsumModal } from '../../../components/ui/CreateVsumModal';
+import * as apiModule from '../../../services/api';
 
-jest.mock('../../../services/api', () => ({
+vi.mock('../../../services/api', () => ({
   apiService: {
-    createVsum: jest.fn().mockResolvedValue({
+    createVsum: vi.fn().mockResolvedValue({
       data: { id: 1, name: 'Test VSUM' },
       message: 'created',
     }),
   },
 }));
 
-jest.mock('../../../components/ui/ToastProvider', () => {
-  const actual = jest.requireActual('../../../components/ui/ToastProvider');
+vi.mock('../../../components/ui/ToastProvider', async () => {
+  const actual = (await vi.importActual<any>('../../../components/ui/ToastProvider'));
   return {
     ...actual,
     useToast: () => ({
-      showSuccess: jest.fn(),
-      showError: jest.fn(),
-      showInfo: jest.fn(),
+      showSuccess: vi.fn(),
+      showError: vi.fn(),
+      showInfo: vi.fn(),
     }),
   };
 });
 
-const { apiService } = require('../../../services/api') as {
-  apiService: { createVsum: jest.Mock };
+const { apiService } = (apiModule as unknown) as {
+  apiService: { createVsum: Mock };
 };
 
 describe('CreateVsumModal', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('renders when open and calls onClose on Cancel', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
 
     render(
       <CreateVsumModal
@@ -48,8 +50,8 @@ describe('CreateVsumModal', () => {
   });
 
   it('calls apiService.createVsum on submit with name', async () => {
-    const onClose = jest.fn();
-    const onSuccess = jest.fn();
+    const onClose = vi.fn();
+    const onSuccess = vi.fn();
 
     render(
       <CreateVsumModal
@@ -74,18 +76,18 @@ describe('CreateVsumModal', () => {
 
 describe('CreateVsumModal – additional tests', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('returns null when not open', () => {
     const { container } = render(
-      <CreateVsumModal isOpen={false} onClose={jest.fn()} />,
+      <CreateVsumModal isOpen={false} onClose={vi.fn()} />,
     );
     expect(container.firstChild).toBeNull();
   });
 
   it('Create button is disabled when name is empty', () => {
-    render(<CreateVsumModal isOpen onClose={jest.fn()} />);
+    render(<CreateVsumModal isOpen onClose={vi.fn()} />);
     expect(
       screen.getByRole('button', { name: /Create project/i }),
     ).toBeDisabled();
@@ -96,7 +98,7 @@ describe('CreateVsumModal – additional tests', () => {
       () => new Promise((r) => setTimeout(r, 500)),
     );
 
-    render(<CreateVsumModal isOpen onClose={jest.fn()} />);
+    render(<CreateVsumModal isOpen onClose={vi.fn()} />);
     await userEvent.type(screen.getByLabelText(/Name \*/i), 'My VSUM');
     fireEvent.click(screen.getByRole('button', { name: /Create project/i }));
 
@@ -106,7 +108,7 @@ describe('CreateVsumModal – additional tests', () => {
   it('shows API error when createVsum throws', async () => {
     apiService.createVsum.mockRejectedValueOnce(new Error('Server offline'));
 
-    render(<CreateVsumModal isOpen onClose={jest.fn()} />);
+    render(<CreateVsumModal isOpen onClose={vi.fn()} />);
     await userEvent.type(screen.getByLabelText(/Name \*/i), 'My VSUM');
     fireEvent.click(screen.getByRole('button', { name: /Create project/i }));
 
@@ -118,7 +120,7 @@ describe('CreateVsumModal – additional tests', () => {
       data: { id: 2, name: 'Ecore VSUM' },
     });
 
-    render(<CreateVsumModal isOpen onClose={jest.fn()} />);
+    render(<CreateVsumModal isOpen onClose={vi.fn()} />);
     await userEvent.type(screen.getByLabelText(/Name \*/i), 'Ecore VSUM');
     await userEvent.type(
       screen.getByLabelText(/Description/i),
@@ -137,7 +139,7 @@ describe('CreateVsumModal – additional tests', () => {
   it('trims whitespace from name before submitting', async () => {
     apiService.createVsum.mockResolvedValueOnce({ data: { id: 3 } });
 
-    render(<CreateVsumModal isOpen onClose={jest.fn()} />);
+    render(<CreateVsumModal isOpen onClose={vi.fn()} />);
     await userEvent.type(screen.getByLabelText(/Name \*/i), '  Padded Name  ');
     fireEvent.click(screen.getByRole('button', { name: /Create project/i }));
 
@@ -149,7 +151,7 @@ describe('CreateVsumModal – additional tests', () => {
   });
 
   it('renders the modal content when open', () => {
-    render(<CreateVsumModal isOpen onClose={jest.fn()} />);
+    render(<CreateVsumModal isOpen onClose={vi.fn()} />);
     expect(screen.getByText('New Project')).toBeInTheDocument();
   });
 });
