@@ -2,7 +2,7 @@ import { AuthService } from './auth';
 import { FlowData } from '../types/flow';
 import { ApiResponse, Vsum, VsumDetails } from '../types/vsum';
 import { config } from '../config/environment';
-import type { VsumBuildResponse, VsumValidationResponse } from '../types/vsumBuild';
+import type { VsumBuildResponse, VsumValidationResponse, VsumVersionResponse } from '../types/vsumBuild';
 
 class ApiService {
   private readonly baseURL = config.apiBaseUrl;
@@ -666,12 +666,38 @@ class ApiService {
   }
 
   /**
-   * vSUMS: Download the built, runnable VSUM jar
-   * GET /api/v1/vsums/{id}/build/artifact
-   * Waits for the Maven build of the VSUM and returns the jar-with-dependencies
+   * vSUMS: Download the runnable VSUM jar of an already finished build (a published version).
+   * GET /api/v1/vsums/{id}/builds/{buildId}/artifact
+   * Does not start a build.
    */
-  async downloadVsumJar(id: number | string): Promise<Blob> {
-    return this.downloadVsumZip(`/api/v1/vsums/${id}/build/artifact`, 'Runnable JAR');
+  async downloadVsumJar(id: number | string, buildId: number | string): Promise<Blob> {
+    return this.downloadVsumZip(`/api/v1/vsums/${id}/builds/${buildId}/artifact`, 'Runnable JAR');
+  }
+
+  /**
+   * vSUMS: Publish the working copy: builds it and, if the build succeeds, makes it the next version
+   * POST /api/v1/vsums/{id}/publish
+   * Returns the build to poll; answers 409 while another publish is running.
+   */
+  async publishVsum(id: number | string): Promise<ApiResponse<VsumBuildResponse>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}/publish`, { method: 'POST' });
+  }
+
+  /**
+   * vSUMS: Latest published version, or null when nothing was published yet (404)
+   * GET /api/v1/vsums/{id}/versions/latest
+   */
+  async getLatestVsumVersion(id: number | string): Promise<VsumVersionResponse | null> {
+    try {
+      const res = await this.authenticatedRequest<ApiResponse<VsumVersionResponse | null>>(
+        `/api/v1/vsums/${id}/versions/latest`,
+      );
+      const version = res?.data;
+      return version?.buildId == null || version.number == null ? null : version;
+    } catch (error) {
+      if ((error as { status?: number } | null)?.status === 404) return null;
+      throw error;
+    }
   }
 
   /**
@@ -708,12 +734,12 @@ class ApiService {
   }
 
   /**
-   * vSUMS: Download easy deploy package as ZIP file
-   * GET /api/v1/vsums/{id}/build/bundle
-   * Returns a ZIP file blob containing a JAR, documentation, and scripts
+   * vSUMS: Download the easy deploy package of an already finished build (a published version)
+   * GET /api/v1/vsums/{id}/builds/{buildId}/bundle
+   * Returns a ZIP file blob containing a JAR, documentation, and scripts. Does not start a build.
    */
-  async downloadVsumBundle(id: number | string): Promise<Blob> {
-    return this.downloadVsumZip(`/api/v1/vsums/${id}/build/bundle`, 'Easy deploy package');
+  async downloadVsumBundle(id: number | string, buildId: number | string): Promise<Blob> {
+    return this.downloadVsumZip(`/api/v1/vsums/${id}/builds/${buildId}/bundle`, 'Easy deploy package');
   }
 
   /**

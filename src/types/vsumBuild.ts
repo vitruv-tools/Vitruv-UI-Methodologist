@@ -70,6 +70,17 @@ export interface VsumBuildResponse {
   finishedAt?: string | null;
 }
 
+/** A published version of a VSUM (`GET /api/v1/vsums/{id}/versions/latest`). */
+export interface VsumVersionResponse {
+  /** Version number, counted per VSUM: 1, 2, 3, … */
+  number: number;
+  /** The successful build this version was published from; the downloads read its artifact. */
+  buildId: number;
+  /** Email of the user who published it. */
+  createdBy?: string;
+  createdAt?: string;
+}
+
 /** Result of the background validation (`GET /api/v1/vsums/{id}/validation`). */
 export interface VsumValidationResponse {
   valid?: boolean;

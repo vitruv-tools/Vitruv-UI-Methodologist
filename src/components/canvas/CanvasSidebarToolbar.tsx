@@ -22,7 +22,11 @@ interface CanvasSidebarToolbarProps {
   downloadingBundle: boolean;
   savingChanges: boolean;
   checkingBuild: boolean;
+  /** The JAR and the easy deploy package come from the latest published version; disabled without one. */
+  hasPublishedVersion?: boolean;
 }
+
+const PUBLISH_FIRST_HINT = 'Publish first';
 
 const sidebarStackStyle: React.CSSProperties = {
   position: 'fixed',
@@ -288,6 +292,7 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
   downloadingBundle,
   savingChanges,
   checkingBuild,
+  hasPublishedVersion = true,
 }) => {
   const downloading = downloadingProject || downloadingJar || downloadingBundle;
   const busy = downloading || savingChanges || checkingBuild;
@@ -354,18 +359,18 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
               />
               <DownloadMenuItem
                 label="Runnable JAR"
-                sublabel="Built VSUM, start with java -jar"
+                sublabel={hasPublishedVersion ? 'Latest published version, start with java -jar' : PUBLISH_FIRST_HINT}
                 icon={<JarIcon />}
                 loading={downloadingJar}
-                disabled={busy}
+                disabled={busy || !hasPublishedVersion}
                 onClick={() => { setShowDownloadMenu(false); onDownloadJar(); }}
               />
               <DownloadMenuItem
                 label="Easy deploy package"
-                sublabel="JAR, docs, and scripts ready to run"
+                sublabel={hasPublishedVersion ? 'Latest published version: JAR, docs, and scripts' : PUBLISH_FIRST_HINT}
                 icon={<PackageIcon />}
                 loading={downloadingBundle}
-                disabled={busy}
+                disabled={busy || !hasPublishedVersion}
                 onClick={() => { setShowDownloadMenu(false); onDownloadBundle(); }}
               />
             </div>
