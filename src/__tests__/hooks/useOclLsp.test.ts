@@ -36,7 +36,9 @@ beforeEach(() => {
   global.WebSocket.OPEN = 1;
 
   localStorage.clear();
-  localStorage.setItem('auth.user', JSON.stringify({ id: 'user-123' }));
+  // A signed-in user: the access token is sent as a WebSocket subprotocol.
+  localStorage.setItem('auth.access_token', 'test-token');
+  localStorage.setItem('auth.access_expires_at', String(Date.now() + 60_000));
 
   vi.clearAllMocks();
   mockRegisterCompletionItemProvider.mockReturnValue(mockCompletionDisposable);
@@ -92,8 +94,8 @@ describe('useOclLsp', () => {
       expect(global.WebSocket).not.toHaveBeenCalled();
     });
 
-    it('does not open a WebSocket when userId is absent from localStorage', () => {
-      localStorage.removeItem('auth.user');
+    it('does not open a WebSocket when the user is not signed in', () => {
+      localStorage.clear();
       const monaco = makeMonacoStub();
       const { result } = renderHook(() => useOclLsp(defaultProps));
       const mockEditor = { getModel: vi.fn() };
@@ -104,19 +106,28 @@ describe('useOclLsp', () => {
 
   // ── 2. WebSocket URL construction ─────────────────────────────────────────
   describe('WebSocket creation', () => {
-    it('opens a WebSocket with the correct URL including userId and vsumId', () => {
+    it('opens a WebSocket for the project and sends the token as a subprotocol', () => {
       process.env.REACT_APP_API_BASE_URL = 'http://localhost:9811';
       mountHookAndConnect();
       expect(global.WebSocket).toHaveBeenCalledWith(
-        'ws://localhost:9811/ocl-lsp?userId=user-123&vsumId=42'
+        'ws://localhost:9811/ocl-lsp?vsumId=42',
+        ['bearer', 'test-token']
       );
+    });
+
+    it('does not put the token or a user id into the URL', () => {
+      mountHookAndConnect();
+      const url = (global.WebSocket as any).mock.calls[0][0] as string;
+      expect(url).not.toContain('test-token');
+      expect(url).not.toContain('userId');
     });
 
     it('converts https base URL to wss', () => {
       process.env.REACT_APP_API_BASE_URL = 'https://api.example.com';
       mountHookAndConnect();
       expect(global.WebSocket).toHaveBeenCalledWith(
-        expect.stringContaining('wss://api.example.com')
+        expect.stringContaining('wss://api.example.com'),
+        ['bearer', 'test-token']
       );
     });
   });

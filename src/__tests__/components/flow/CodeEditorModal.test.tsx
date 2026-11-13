@@ -359,9 +359,10 @@ describe('CodeEditorModal', () => {
 describe('CodeEditorModal – additional tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // mock localStorage for auth.user (needed by connectToLsp)
+    // mock localStorage for a signed-in user (the token is needed by connectToLsp)
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key) => {
-      if (key === 'auth.user') return JSON.stringify({ id: 'user-1' });
+      if (key === 'auth.access_token') return 'test-token';
+      if (key === 'auth.access_expires_at') return String(Date.now() + 60_000);
       return null;
     });
     // suppress WebSocket in unit tests

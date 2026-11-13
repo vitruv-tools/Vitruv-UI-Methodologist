@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback } from 'react';
 import type { RefObject } from 'react';
 import { Monaco } from '@monaco-editor/react';
 import * as monaco from 'monaco-editor';
+import { openLspWebSocket } from '../utils/lspWebSocket';
 
 let _lspRequestId = 2; // start at 2 — id 1 is reserved for LSP initialize
 function nextLspRequestId(): number {
@@ -119,13 +120,8 @@ export function useOclLsp({ vsumId, documentId, languageId, getCode }: UseOclLsp
     if (!vsumId) return;
     disconnect();
 
-    const rawUser = localStorage.getItem('auth.user');
-    const userId = rawUser ? JSON.parse(rawUser).id : null;
-    if (!userId) return;
-
-    const apiBase = process.env.REACT_APP_API_BASE_URL || 'http://localhost:9811';
-    const wsBase = apiBase.replace('https://', 'wss://').replace('http://', 'ws://');
-    const ws = new WebSocket(`${wsBase}/ocl-lsp?userId=${encodeURIComponent(userId)}&vsumId=${encodeURIComponent(vsumId)}`);
+    const ws = openLspWebSocket('/ocl-lsp', vsumId);
+    if (!ws) return;
     wsRef.current = ws;
 
     ws.onmessage = (event) => {

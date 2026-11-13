@@ -15,6 +15,7 @@ import {
   sharedByToMember,
   uniqueVsumMembers,
   writeStoredProjectAccess,
+  shouldRecordMemberListRole,
 } from '../../utils/vsumMemberUtils';
 
 describe('vsumMemberUtils', () => {
@@ -199,5 +200,21 @@ describe('vsumMemberUtils', () => {
     expect(formatProjectMemberStackLabel(1, { isSoloOwner: true })).toBe('Only you');
     expect(formatProjectMemberStackLabel(1, { isSharedAccess: true })).toBe('1 person');
     expect(formatProjectMemberStackLabel(3)).toBe('3 people');
+  });
+
+  describe('shouldRecordMemberListRole', () => {
+    it('does not let a guessed role replace one the API reported (viewer with no member list)', () => {
+      expect(shouldRecordMemberListRole(null, true)).toBe(false);
+      expect(shouldRecordMemberListRole(undefined, true)).toBe(false);
+    });
+
+    it('records a guessed role when the API has not reported one yet', () => {
+      expect(shouldRecordMemberListRole(null, false)).toBe(true);
+    });
+
+    it('always records a role taken from the real membership', () => {
+      expect(shouldRecordMemberListRole('OWNER', true)).toBe(true);
+      expect(shouldRecordMemberListRole('VIEWER', false)).toBe(true);
+    });
   });
 });
