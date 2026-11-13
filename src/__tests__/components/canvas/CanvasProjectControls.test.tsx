@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { CanvasProjectControls } from '../../../components/canvas/CanvasProjectControls';
+import { CanvasProjectControls, formatVersionLabel } from '../../../components/canvas/CanvasProjectControls';
 
 interface MockProjectPickerMenuProps {
   currentProjectName: string;
@@ -54,6 +54,40 @@ const createProps = () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+describe('formatVersionLabel', () => {
+  it('shows number and day, or only the number without a usable date', () => {
+    expect(formatVersionLabel({ number: 4, createdAt: '2026-11-05T10:00:00Z' })).toBe('v4 · 5 Nov');
+    expect(formatVersionLabel({ number: 4 })).toBe('v4');
+    expect(formatVersionLabel({ number: 4, createdAt: 'not a date' })).toBe('v4');
+    expect(formatVersionLabel(null)).toBeNull();
+  });
+});
+
+describe('CanvasProjectControls publish', () => {
+  it('shows the publish button for editors and calls onPublish', () => {
+    const onPublish = vi.fn();
+    render(<CanvasProjectControls {...createProps()} onPublish={onPublish} latestVersionLabel="v4 · 5 Nov" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+
+    expect(onPublish).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('latest-version')).toHaveTextContent('v4 · 5 Nov');
+  });
+
+  it('hides the publish button from viewers', () => {
+    render(<CanvasProjectControls {...createProps()} readOnly onPublish={vi.fn()} latestVersionLabel={null} />);
+
+    expect(screen.queryByRole('button', { name: /Publish/ })).not.toBeInTheDocument();
+  });
+
+  it('shows "Publishing…" disabled while publishing and "Not published yet" without a version', () => {
+    render(<CanvasProjectControls {...createProps()} onPublish={vi.fn()} publishing latestVersionLabel={null} />);
+
+    expect(screen.getByRole('button', { name: 'Publishing…' })).toBeDisabled();
+    expect(screen.getByTestId('latest-version')).toHaveTextContent('Not published yet');
+  });
 });
 
 describe('CanvasProjectControls', () => {

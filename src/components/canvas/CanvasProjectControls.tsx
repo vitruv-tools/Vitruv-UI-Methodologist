@@ -26,6 +26,23 @@ interface CanvasProjectControlsProps {
   /** Number of validation problems; the counter is hidden when 0 or omitted. */
   validationProblemCount?: number;
   onShowValidationProblems?: () => void;
+  /** Publish button; shown to owners and members only (hidden when `readOnly`). */
+  onPublish?: () => void;
+  publishing?: boolean;
+  /** Label of the latest published version, e.g. "v4 · 5 Nov"; "Not published yet" when null. */
+  latestVersionLabel?: string | null;
+}
+
+/** "v4 · 5 Nov" for a published version, or null without one. */
+export function formatVersionLabel(
+  version: { number: number; createdAt?: string } | null | undefined,
+): string | null {
+  if (!version) return null;
+  const raw = version.createdAt;
+  const date = raw ? new Date(raw) : null;
+  if (!date || Number.isNaN(date.getTime())) return `v${version.number}`;
+  const day = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return `v${version.number} · ${day}`;
 }
 
 const projectControlsStyle: React.CSSProperties = {
@@ -152,6 +169,9 @@ export const CanvasProjectControls: React.FC<CanvasProjectControlsProps> = ({
   onReactionLineStyleChange,
   validationProblemCount = 0,
   onShowValidationProblems,
+  onPublish,
+  publishing = false,
+  latestVersionLabel,
 }) => (
   <div style={projectControlsStyle}>
     <button
@@ -288,6 +308,49 @@ export const CanvasProjectControls: React.FC<CanvasProjectControlsProps> = ({
         }}
       >
         {validationProblemCount === 1 ? '1 problem' : `${validationProblemCount} problems`}
+      </button>
+    )}
+
+    {latestVersionLabel !== undefined && (
+      <span
+        data-testid="latest-version"
+        title="Latest published version"
+        style={{
+          marginLeft: 6,
+          fontSize: 11,
+          fontWeight: 600,
+          color: 'var(--v-text-muted)',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {latestVersionLabel ?? 'Not published yet'}
+      </span>
+    )}
+
+    {!readOnly && onPublish && (
+      <button
+        type="button"
+        onClick={onPublish}
+        disabled={publishing}
+        aria-busy={publishing}
+        title="Build the current state and publish it as the next version"
+        style={{
+          height: 26,
+          marginLeft: 6,
+          padding: '0 10px',
+          border: 'none',
+          borderRadius: 6,
+          background: '#049484',
+          color: '#ffffff',
+          fontSize: 11,
+          fontWeight: 700,
+          cursor: publishing ? 'not-allowed' : 'pointer',
+          opacity: publishing ? 0.7 : 1,
+          whiteSpace: 'nowrap',
+          fontFamily: 'inherit',
+        }}
+      >
+        {publishing ? 'Publishing…' : 'Publish'}
       </button>
     )}
 

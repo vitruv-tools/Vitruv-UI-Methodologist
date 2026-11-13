@@ -23,7 +23,7 @@ import {
   type CanvasPopupNotificationAction,
   type CanvasPopupNotificationType,
 } from '../components/canvas/CanvasPopupNotification';
-import { CanvasProjectControls } from '../components/canvas/CanvasProjectControls';
+import { CanvasProjectControls, formatVersionLabel } from '../components/canvas/CanvasProjectControls';
 import { extractApiErrorMessage } from '../utils/apiErrorMessage';
 import { describeBuildFailure, describeBuildSuccess } from '../utils/buildCheckMessages';
 import { CanvasSidebarToolbar } from '../components/canvas/CanvasSidebarToolbar';
@@ -33,6 +33,7 @@ import { ValidationProblemsDialog } from '../components/canvas/ValidationProblem
 import type { BuildFailure, BuildProblem } from '../types/vsumBuild';
 import { buildFailureFromError, isReactionsProblem } from '../utils/buildProblems';
 import { useVsumValidation } from '../hooks/useVsumValidation';
+import { useVsumPublish } from '../hooks/useVsumPublish';
 import { CanvasProjectAccessControls } from '../components/canvas/CanvasProjectAccessControls';
 import { CanvasConstraintsOverlay } from '../components/canvas/CanvasConstraintsOverlay';
 import { CanvasMetricsOverlay } from '../components/canvas/CanvasMetricsOverlay';
@@ -523,6 +524,13 @@ export const CanvasPage: React.FC = () => {
     activeProjectId,
     effectiveVsumRole,
   );
+
+  const { latestVersion, publishing, publish } = useVsumPublish({
+    projectId: activeProjectId,
+    enabled: effectiveVsumRole != null,
+    onNotify: showPopup,
+    onFailure: showBuildFailure,
+  });
 
   const displayProjectSharer = React.useMemo(() => {
     if (projectSharer) return projectSharer;
@@ -1462,12 +1470,14 @@ export const CanvasPage: React.FC = () => {
     }
   }, [activeProjectId, showPopup, showBuildError]);
 
+  const latestBuildId = latestVersion?.buildId;
+
   const handleDownloadJar = useCallback(async () => {
-    if (!activeProjectId) return;
+    if (!activeProjectId || latestBuildId == null) return;
     setDownloadingJar(true);
-    showPopup('Building and downloading runnable JAR…', 'info');
+    showPopup('Downloading runnable JAR…', 'info');
     try {
-      const blob = await apiService.downloadVsumJar(activeProjectId);
+      const blob = await apiService.downloadVsumJar(activeProjectId, latestBuildId);
       downloadBlobAsFile(blob, `vsum-${activeProjectId}.jar`);
       showPopup('Runnable JAR downloaded successfully!', 'success');
     } catch (e: unknown) {
@@ -1475,14 +1485,14 @@ export const CanvasPage: React.FC = () => {
     } finally {
       setDownloadingJar(false);
     }
-  }, [activeProjectId, showPopup, showBuildError]);
+  }, [activeProjectId, latestBuildId, showPopup, showBuildError]);
 
   const handleDownloadBundle = useCallback(async () => {
-    if (!activeProjectId) return;
+    if (!activeProjectId || latestBuildId == null) return;
     setDownloadingBundle(true);
     showPopup('Downloading easy deploy package…', 'info');
     try {
-      const blob = await apiService.downloadVsumBundle(activeProjectId);
+      const blob = await apiService.downloadVsumBundle(activeProjectId, latestBuildId);
       downloadBlobAsFile(blob, `vsum-${activeProjectId}-easy-deploy.zip`);
       showPopup('Easy deploy package downloaded successfully!', 'success');
     } catch (e: unknown) {
@@ -1490,7 +1500,7 @@ export const CanvasPage: React.FC = () => {
     } finally {
       setDownloadingBundle(false);
     }
-  }, [activeProjectId, showPopup, showBuildError]);
+  }, [activeProjectId, latestBuildId, showPopup, showBuildError]);
 
   /** Opens the file of a build problem: reaction files at the problem's line, metamodels in their UML view. */
   const handleOpenBuildProblem = useCallback((problem: BuildProblem): boolean => {
@@ -1773,6 +1783,7 @@ export const CanvasPage: React.FC = () => {
         downloadingBundle={downloadingBundle}
         savingChanges={savingChanges}
         checkingBuild={checkingBuild}
+        hasPublishedVersion={latestVersion != null}
       />}
 
       <CanvasProjectControls
@@ -1802,6 +1813,9 @@ export const CanvasPage: React.FC = () => {
         onReactionLineStyleChange={handleReactionLineStyleChange}
         validationProblemCount={validationProblems.length}
         onShowValidationProblems={() => setShowValidationProblems(true)}
+        onPublish={() => { void publish(); }}
+        publishing={publishing}
+        latestVersionLabel={formatVersionLabel(latestVersion)}
       />
 
       <UnsavedTabCloseDialog

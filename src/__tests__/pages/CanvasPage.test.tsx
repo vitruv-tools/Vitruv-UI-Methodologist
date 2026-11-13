@@ -109,6 +109,9 @@ vi.mock('../../services/api', () => ({
     downloadVsumProject: vi.fn(),
     downloadVsumJar: vi.fn(),
     downloadVsumBundle: vi.fn(),
+    getLatestVsumVersion: vi.fn(),
+    publishVsum: vi.fn(),
+    getVsumBuild: vi.fn(),
     renameVsum: vi.fn(),
     deleteMetaModel: vi.fn(),
     syncVsumChanges: vi.fn(),
@@ -437,6 +440,7 @@ describe('CanvasPage build problems', () => {
   const exportJar = async () => {
     render(<CanvasPage />);
     await waitForProject('Project A');
+    await screen.findByText(/^v3/);
     fireEvent.click(screen.getByRole('button', { name: /^Download\./ }));
     fireEvent.click(screen.getByRole('button', { name: /Runnable JAR/ }));
   };
@@ -449,8 +453,103 @@ describe('CanvasPage build problems', () => {
     (apiService.getVsum as Mock).mockResolvedValue({ data: {} });
     (apiService.getVsumsPaginated as Mock).mockResolvedValue({ data: [] });
     (apiService.getVsumDetails as Mock).mockResolvedValue(vsumDetails(10, 'Project A'));
+    (apiService.getLatestVsumVersion as Mock).mockResolvedValue({ number: 3, buildId: 99 });
     mockOpenReactionFileAt.mockReturnValue(true);
     mockOpenMetaModelFile.mockReturnValue(true);
+  });
+
+  it('downloads the JAR of the latest published version without building', async () => {
+    (apiService.downloadVsumJar as Mock).mockResolvedValueOnce(new Blob(['PK']));
+    URL.createObjectURL = vi.fn(() => 'blob:x');
+    URL.revokeObjectURL = vi.fn();
+
+    await exportJar();
+
+    await waitFor(() => expect(apiService.downloadVsumJar).toHaveBeenCalledWith(10, 99));
+  });
+
+  it('publishes and shows the new version number', async () => {
+    (apiService.publishVsum as Mock).mockResolvedValueOnce({ data: { id: 5, vsumId: 10, status: 'SUCCEEDED' } });
+    (apiService.getLatestVsumVersion as Mock)
+      .mockResolvedValueOnce({ number: 3, buildId: 99 })
+      .mockResolvedValueOnce({ number: 4, buildId: 100 });
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+    await screen.findByText(/^v3/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+
+    expect(await screen.findByTestId('canvas-popup-notification')).toHaveTextContent('Published v4');
+    expect(await screen.findByText(/^v4/)).toBeInTheDocument();
+  });
+
+  it('shows the problems of a failed publish and keeps the latest version', async () => {
+    (apiService.publishVsum as Mock).mockResolvedValueOnce({
+      data: {
+        id: 5, vsumId: 10, status: 'FAILED', errorCode: 'VSUM_REACTIONS_ERROR', problems: [reactionProblem],
+      },
+    });
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+    await screen.findByText(/^v3/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Publish failed' });
+    expect(within(dialog).getByText('my.reactions')).toBeInTheDocument();
+    expect(screen.getByText(/^v3/)).toBeInTheDocument();
+  });
+
+  it('shows a plain error when the publish build fails without problems', async () => {
+    (apiService.publishVsum as Mock).mockResolvedValueOnce({
+      data: { id: 5, vsumId: 10, status: 'FAILED', errorMessage: 'Build service unavailable' },
+    });
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+    await screen.findByText(/^v3/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+
+    expect(await screen.findByTestId('canvas-popup-notification')).toHaveTextContent('Build service unavailable');
+    expect(screen.queryByRole('dialog', { name: 'Publish failed' })).not.toBeInTheDocument();
+  });
+
+  it('shows the problems when starting the publish is rejected with problems', async () => {
+    (apiService.publishVsum as Mock).mockRejectedValueOnce(Object.assign(new Error('Invalid'), {
+      status: 422,
+      response: { status: 422, data: { message: 'Invalid', problems: [reactionProblem] } },
+    }));
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+    await screen.findByText(/^v3/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Publish failed' })).toBeInTheDocument();
+  });
+
+  it('says so when a publish is already running (409)', async () => {
+    (apiService.publishVsum as Mock).mockRejectedValueOnce(apiError(409, 'Conflict'));
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+    await screen.findByText(/^v3/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+
+    expect(await screen.findByTestId('canvas-popup-notification')).toHaveTextContent('A publish is already running');
+  });
+
+  it('disables the downloads without a published version', async () => {
+    (apiService.getLatestVsumVersion as Mock).mockResolvedValue(null);
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+    await screen.findByText('Not published yet');
+
+    fireEvent.click(screen.getByRole('button', { name: /^Download\./ }));
+    fireEvent.click(screen.getByRole('button', { name: /Runnable JAR/ }));
+
+    expect(screen.getAllByText('Publish first')).toHaveLength(2);
+    expect(apiService.downloadVsumJar).not.toHaveBeenCalled();
   });
 
   it('shows the problems of a failed JAR export and opens a reaction file at the line', async () => {

@@ -368,11 +368,11 @@ describe('ApiService – downloadVsumJar', () => {
       blob: async () => new Blob([jarBytes], { type: 'application/octet-stream' }),
     } as unknown as Response);
 
-    const blob = await apiService.downloadVsumJar(42);
+    const blob = await apiService.downloadVsumJar(42, 7);
 
     expect(blob.size).toBe(jarBytes.length);
     expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringMatching(/\/api\/v1\/vsums\/42\/build\/artifact$/),
+      expect.stringMatching(/\/api\/v1\/vsums\/42\/builds\/7\/artifact$/),
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -414,7 +414,7 @@ describe('ApiService – structured build problems', () => {
       blob: async () => new Blob([]),
     } as unknown as Response);
 
-    const error = await apiService.downloadVsumJar(42).catch((e: unknown) => e);
+    const error = await apiService.downloadVsumJar(42, 7).catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toBe(body.message);
@@ -469,6 +469,49 @@ describe('ApiService – structured build problems', () => {
     expect(result.data.errorCode).toBe('VSUM_BUILD_FAILED');
     expect(result.data.problems).toEqual([problem]);
   });
+
+  it('publishes the working copy and returns the build to follow', async () => {
+    mockFetch({ data: { id: 8, vsumId: 42, status: 'QUEUED' }, message: 'started' }, 202);
+
+    const result = await apiService.publishVsum(42);
+
+    expect(result.data.id).toBe(8);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/v1\/vsums\/42\/publish$/),
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('reads the latest published version', async () => {
+    const version = { number: 4, buildId: 9, createdBy: 'a@b.c', createdAt: '2026-11-05T10:00:00Z' };
+    mockFetch({ data: version, message: null });
+
+    await expect(apiService.getLatestVsumVersion(42)).resolves.toEqual(version);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/v1\/vsums\/42\/versions\/latest$/),
+      expect.any(Object),
+    );
+  });
+
+  it('treats a 404 as "not published yet"', async () => {
+    mockFetch({ message: 'No version' }, 404);
+
+    await expect(apiService.getLatestVsumVersion(42)).resolves.toBeNull();
+  });
+
+  it('treats a version without number or build as "not published yet"', async () => {
+    mockFetch({ data: { buildId: 9 }, message: null });
+    await expect(apiService.getLatestVsumVersion(42)).resolves.toBeNull();
+
+    mockFetch({ data: { number: 1 }, message: null });
+    await expect(apiService.getLatestVsumVersion(42)).resolves.toBeNull();
+  });
+
+  it('passes on other errors of the latest-version request', async () => {
+    mockFetch({ message: 'Server error' }, 500);
+
+    await expect(apiService.getLatestVsumVersion(42)).rejects.toThrow();
+  });
 });
 
 // ── downloadVsumBundle ────────────────────────────────────────────────────────
@@ -499,12 +542,12 @@ describe('ApiService – downloadVsumBundle', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it('requests the build/bundle endpoint and returns a ZIP blob on success', async () => {
+  it('requests the builds/{id}/bundle endpoint and returns a ZIP blob on success', async () => {
     mockZipFetch();
-    const blob = await apiService.downloadVsumBundle(42);
+    const blob = await apiService.downloadVsumBundle(42, 7);
 
     expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/api/v1/vsums/42/build/bundle'),
+      expect.stringContaining('/api/v1/vsums/42/builds/7/bundle'),
       expect.any(Object),
     );
     expect(blob.size).toBeGreaterThan(0);
@@ -526,7 +569,7 @@ describe('ApiService – downloadVsumBundle', () => {
       blob: async () => new Blob(['{"message":"Bundle failed"}'], { type: 'application/json' }),
     } as unknown as Response);
 
-    await expect(apiService.downloadVsumBundle(42)).rejects.toThrow('Bundle failed');
+    await expect(apiService.downloadVsumBundle(42, 7)).rejects.toThrow('Bundle failed');
   });
 
   it('throws on non-ok status', async () => {
@@ -539,7 +582,7 @@ describe('ApiService – downloadVsumBundle', () => {
       blob: async () => new Blob([]),
     } as unknown as Response);
 
-    await expect(apiService.downloadVsumBundle(42)).rejects.toThrow('Server error');
+    await expect(apiService.downloadVsumBundle(42, 7)).rejects.toThrow('Server error');
   });
 });
 
