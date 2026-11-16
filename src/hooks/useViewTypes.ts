@@ -206,8 +206,8 @@ export function useViewTypes(
     }
     migrationInFlight.current = true;
     try {
-      let next = viewTypesRef.current;
-      for (const plan of plans) {
+      const base = viewTypesRef.current;
+      const uploaded = await Promise.all(plans.map(async (plan, index) => {
         const query = plan.legacy.query?.trim()
           ? plan.legacy.query
           : buildNeoJoinSkeleton(plan.legacy.label, plan.importUris);
@@ -218,15 +218,16 @@ export function useViewTypes(
           id: plan.legacy.id || generateId(),
           label: plan.legacy.label,
           scope: plan.sourceIds.length > 1 ? 'multi' : 'single',
-          angle: plan.legacy.angle ?? defaultViewAngle(next.length),
+          angle: plan.legacy.angle ?? defaultViewAngle(base.length + index),
           linkedNodeIds: plan.legacy.linkedNodeIds ?? [],
           metaModelSourceIds: plan.sourceIds,
           editable: plan.legacy.editable ?? false,
           query,
           fileId,
         };
-        next = [...next, created];
-      }
+        return created;
+      }));
+      const next = [...base, ...uploaded];
       setViewTypes(next);
       rememberAngles(vsumId, next);
       await syncViewList(next);
