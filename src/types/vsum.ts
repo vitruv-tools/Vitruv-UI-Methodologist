@@ -41,9 +41,26 @@ export interface VsumMetaModelRelation {
   fineGranularMetaModelRelations?: import('./FineGranularMetaModelRelation').EditableFineGranularMetaModelRelation[];
 }
 
+export interface VsumViewModelRef {
+  id?: number;
+  sourceId?: number | null;
+  name?: string;
+}
+
+/** A NeoJoin view returned by VSUM `/details`. */
+export interface VsumView {
+  id: number;
+  name?: string | null;
+  description?: string | null;
+  fileStorageId: number;
+  createdAt?: string;
+  assignedModels?: VsumViewModelRef[];
+}
+
 export interface VsumDetails extends Vsum {
   metaModels: VsumMetaModelRef[];
   metaModelsRelation?: VsumMetaModelRelation[];
+  views?: VsumView[];
 }
 
 export interface ApiResponse<T> {

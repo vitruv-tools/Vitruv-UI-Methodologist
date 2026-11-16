@@ -215,6 +215,17 @@ describe('prepareSnapshotForSyncSave', () => {
     expect(result.metaModelRelationRequests).toEqual([
       { sourceId: 1, targetId: 2, reactionFileId: 5 },
     ]);
+    expect(result).not.toHaveProperty('viewRequests');
+  });
+
+  it('keeps the full view list on the sync payload', () => {
+    const viewRequests = [{ id: 3, name: 'Brake', metaModelIds: [1], fileStorageId: 15 }];
+    const result = prepareSnapshotForSyncSave({
+      metaModelIds: [1],
+      metaModelRelationRequests: [],
+      viewRequests,
+    });
+    expect(result.viewRequests).toEqual(viewRequests);
   });
 
   it('returns null relations when none remain after filtering', () => {

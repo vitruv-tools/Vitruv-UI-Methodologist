@@ -1009,6 +1009,7 @@ export const CanvasPage: React.FC = () => {
       const savedSnapshot: WorkspaceSnapshot = {
         metaModelIds: payload.metaModelIds,
         metaModelRelationRequests: savedRelations,
+        ...(payload.viewRequests !== undefined ? { viewRequests: payload.viewRequests } : {}),
       };
       setBaselineForInstance(instanceId, savedSnapshot);
       const session = sessionsRef.current.get(instanceId);
@@ -1537,6 +1538,7 @@ export const CanvasPage: React.FC = () => {
       let savedSnapshot: WorkspaceSnapshot = {
         metaModelIds: payload.metaModelIds,
         metaModelRelationRequests: savedRelations,
+        ...(payload.viewRequests !== undefined ? { viewRequests: payload.viewRequests } : {}),
       };
       if (hasVsumDetailsStore(activeProjectId)) {
         try {
@@ -1556,6 +1558,7 @@ export const CanvasPage: React.FC = () => {
             savedSnapshot = {
               metaModelIds: prepared.metaModelIds,
               metaModelRelationRequests: prepared.metaModelRelationRequests ?? [],
+              ...(prepared.viewRequests !== undefined ? { viewRequests: prepared.viewRequests } : {}),
             };
           }
         } catch {

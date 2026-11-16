@@ -142,4 +142,39 @@ describe('syncVsumWorkspaceChanges', () => {
     ).rejects.toThrow('Not Found');
     expect(apiService.syncVsumChanges).toHaveBeenCalledTimes(1);
   });
+
+  it('sends the full view list, including when it is empty', async () => {
+    (apiService.syncVsumChanges as Mock).mockResolvedValueOnce({ message: 'saved' });
+
+    await syncVsumWorkspaceChanges(4, {
+      metaModelIds: [7],
+      metaModelRelationRequests: null,
+      viewRequests: [],
+    });
+
+    expect(apiService.syncVsumChanges).toHaveBeenCalledWith(4, {
+      metaModelIds: [7],
+      metaModelRelationRequests: null,
+      viewRequests: [],
+    });
+  });
+
+  it('keeps the view list when a reaction-file retry runs', async () => {
+    const viewRequests = [{ id: 3, name: 'Brake', metaModelIds: [7], fileStorageId: 15 }];
+    (apiService.syncVsumChanges as Mock)
+      .mockRejectedValueOnce({ response: { data: { message: 'Reaction files not found for relation' } } })
+      .mockResolvedValueOnce({ message: 'saved' });
+
+    await syncVsumWorkspaceChanges(4, {
+      metaModelIds: [7, 8],
+      metaModelRelationRequests: [{ sourceId: 7, targetId: 8, reactionFileId: 99 }],
+      viewRequests,
+    });
+
+    expect(apiService.syncVsumChanges).toHaveBeenLastCalledWith(4, {
+      metaModelIds: [7, 8],
+      metaModelRelationRequests: [{ sourceId: 7, targetId: 8, reactionFileId: null }],
+      viewRequests,
+    });
+  });
 });

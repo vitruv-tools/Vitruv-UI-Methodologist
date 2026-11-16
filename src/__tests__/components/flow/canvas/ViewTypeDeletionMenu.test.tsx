@@ -80,6 +80,15 @@ describe('ViewTypeDeletionMenu', () => {
         expect(onClose).toHaveBeenCalledTimes(1);
     });
 
+    it('closes when the X button is clicked', () => {
+        const onClose = vi.fn();
+        const onDelete = vi.fn();
+        renderMenu({ onClose, onDelete });
+        fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+        expect(onClose).toHaveBeenCalledTimes(1);
+        expect(onDelete).not.toHaveBeenCalled();
+    });
+
     it('does not call onDelete when backdrop is clicked', () => {
         const onDelete = vi.fn();
         renderMenu({ onDelete });
@@ -101,6 +110,22 @@ describe('ViewTypeDeletionMenu', () => {
         expect(onDelete).not.toHaveBeenCalled();
     });
 
+    it('calls onEditQuery and closes when Edit query is clicked', () => {
+        const onEditQuery = vi.fn();
+        const onClose = vi.fn();
+        const onDelete = vi.fn();
+        renderMenu({ onEditQuery, onClose, onDelete });
+        fireEvent.click(screen.getByRole('button', { name: /Edit query/i }));
+        expect(onEditQuery).toHaveBeenCalledTimes(1);
+        expect(onClose).toHaveBeenCalledTimes(1);
+        expect(onDelete).not.toHaveBeenCalled();
+    });
+
+    it('hides Edit query when the view cannot be edited', () => {
+        renderMenu();
+        expect(screen.queryByRole('button', { name: /Edit query/i })).not.toBeInTheDocument();
+    });
+
     // Positioning
 
     it('renders menu panel at the correct position', () => {
@@ -111,20 +136,13 @@ describe('ViewTypeDeletionMenu', () => {
         expect(panel).toBeInTheDocument();
     });
 
-    // Mouse enter/leave on delete button
-
-    it('changes background on mouse enter of delete button', () => {
-        renderMenu();
-        const btn = screen.getByRole('button', { name: /Delete view type/i });
-        fireEvent.mouseEnter(btn);
-        expect(btn.style.background).toBe('rgb(254, 242, 242)');
-    });
-
-    it('resets background on mouse leave of delete button', () => {
-        renderMenu();
-        const btn = screen.getByRole('button', { name: /Delete view type/i });
-        fireEvent.mouseEnter(btn);
-        fireEvent.mouseLeave(btn);
-        expect(btn.style.background).toBe('none');
+    it('uses theme colors for Edit query and Delete', () => {
+        renderMenu({ onEditQuery: vi.fn() });
+        expect(screen.getByRole('button', { name: /Edit query/i })).toHaveClass('view-type-menu__action');
+        expect(screen.getByRole('button', { name: /Delete view type/i })).toHaveClass(
+            'view-type-menu__action',
+            'view-type-menu__action--danger',
+        );
+        expect(document.body.querySelector('dialog')).toHaveClass('view-type-menu');
     });
 });

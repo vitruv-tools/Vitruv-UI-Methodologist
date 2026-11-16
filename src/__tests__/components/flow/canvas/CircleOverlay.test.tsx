@@ -41,9 +41,12 @@ vi.mock('../../../../components/flow/canvas/ViewTypeContextMenu', () => ({
 }));
 
 vi.mock('../../../../components/flow/canvas/ViewTypeDeletionMenu', () => ({
-    ViewTypeDeletionMenu: ({ label, onDelete, onClose }: any) => (
+    ViewTypeDeletionMenu: ({ label, onDelete, onEditQuery, onClose }: any) => (
         <div data-testid="deletion-menu">
             <span data-testid="deletion-menu-label">{label}</span>
+            <button data-testid="deletion-menu-edit" onClick={onEditQuery}>
+                Edit query
+            </button>
             <button data-testid="deletion-menu-confirm" onClick={onDelete}>
                 Delete
             </button>
@@ -270,6 +273,19 @@ describe('CircleOverlay', () => {
         fireEvent.click(screen.getByTestId('bubble-circle-vt-1'));
         fireEvent.click(screen.getByTestId('deletion-menu-confirm'));
         expect(onDeleteViewType).toHaveBeenCalledWith('vt-1');
+    });
+
+    it('calls onEditViewQuery when Edit query is clicked', () => {
+        const onEditViewQuery = vi.fn();
+        const props = {
+            ...defaultProps(),
+            viewTypes: [makeViewType()],
+            onEditViewQuery,
+        };
+        render(<CircleOverlay {...props} />);
+        fireEvent.click(screen.getByTestId('bubble-circle-vt-1'));
+        fireEvent.click(screen.getByTestId('deletion-menu-edit'));
+        expect(onEditViewQuery).toHaveBeenCalledWith('vt-1');
     });
 
     it('closes deletion menu when cancel is clicked', () => {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { editor } from 'monaco-editor';
 import { vitruvOCLTheme, vitruvOCLThemeDark } from '../components/constraints/VitruvOCLMonarchGrammar';
+import { neoJoinDarkTokenRules, neoJoinLightTokenRules } from '../components/flow/NeoJoinMonarchGrammar';
 import { reactionsDarkTokenRules, reactionsLightTokenRules } from '../components/flow/ReactionsMonarchGrammar';
 import { getTheme, useTheme, type ThemeMode } from './theme';
 
@@ -48,14 +49,14 @@ minimap.background #ffffff #0f172a
 export const vitruvEditorLightTheme: editor.IStandaloneThemeData = {
   base: 'vs',
   inherit: true,
-  rules: [...vitruvOCLTheme.rules, ...reactionsLightTokenRules],
+  rules: [...vitruvOCLTheme.rules, ...reactionsLightTokenRules, ...neoJoinLightTokenRules],
   colors: editorColors('light'),
 };
 
 export const vitruvEditorDarkTheme: editor.IStandaloneThemeData = {
   base: 'vs-dark',
   inherit: true,
-  rules: [...vitruvOCLThemeDark.rules, ...reactionsDarkTokenRules],
+  rules: [...vitruvOCLThemeDark.rules, ...reactionsDarkTokenRules, ...neoJoinDarkTokenRules],
   colors: editorColors('dark'),
 };
 

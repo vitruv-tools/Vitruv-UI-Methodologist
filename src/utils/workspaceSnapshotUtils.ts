@@ -1,9 +1,10 @@
-import { MetaModelRelationRequest } from '../services/api';
+import { MetaModelRelationRequest, type ViewRequest } from '../services/api';
 import type { EditableVsumDetails, EditableVsumMetaModelRelation } from '../types/EditableVsumDetails';
 import type { EditableFineGranularMetaModelRelation } from '../types/FineGranularMetaModelRelation';
 import { VsumDetails, VsumMetaModelRelation } from '../types/vsum';
 import { WorkspaceSnapshot } from '../types/workspace';
 import { toWireLowCodeReactionRequestBase } from './lowCodeReactionPayload';
+import { toViewRequests, viewTypesFromRemote } from './viewTypeSync';
 
 export const normalizeReactionFileId = (value: unknown): number => {
   if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value;
@@ -212,6 +213,9 @@ export const cloneWorkspaceSnapshot = (snapshot: WorkspaceSnapshot): WorkspaceSn
         : undefined,
     }),
   ),
+  ...(snapshot.viewRequests !== undefined
+    ? { viewRequests: snapshot.viewRequests.map(view => ({ ...view, metaModelIds: [...view.metaModelIds] })) }
+    : {}),
 });
 
 export const emptyWorkspaceSnapshot = (): WorkspaceSnapshot => ({
@@ -234,7 +238,11 @@ export const workspaceSnapshotFromVsumDetails = (details: VsumDetails): Workspac
       ...(fines.length ? { fineGranularMetaModelRelationSet: fines } : {}),
     };
   });
-  return { metaModelIds, metaModelRelationRequests };
+  const snapshot: WorkspaceSnapshot = { metaModelIds, metaModelRelationRequests };
+  if (Array.isArray(details.views)) {
+    snapshot.viewRequests = toViewRequests(viewTypesFromRemote(details.views, {}));
+  }
+  return snapshot;
 };
 
 /** Map a VSUM details GET payload into the editable Zustand store shape. */
@@ -322,6 +330,7 @@ export const prepareSnapshotForSyncSave = (
 ): {
   metaModelIds: number[];
   metaModelRelationRequests: MetaModelRelationRequest[] | null;
+  viewRequests?: ViewRequest[];
 } => {
   const metaModelIds = Array.from(new Set(snapshot.metaModelIds ?? []));
   const metaModelRelationRequests = (snapshot.metaModelRelationRequests ?? [])
@@ -345,5 +354,6 @@ export const prepareSnapshotForSyncSave = (
     metaModelIds,
     metaModelRelationRequests:
       metaModelRelationRequests.length > 0 ? metaModelRelationRequests : null,
+    ...(snapshot.viewRequests !== undefined ? { viewRequests: snapshot.viewRequests } : {}),
   };
 };

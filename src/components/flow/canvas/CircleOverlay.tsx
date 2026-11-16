@@ -26,6 +26,7 @@ interface CircleOverlayProps {
     ecoreNodes: Node[];
     onAddViewType: (label: string, scope: ViewTypeScope, linkedNodeIds: string[], angle: number, editable: boolean) => void;
     onDeleteViewType: (id: string) => void;
+    onEditViewQuery?: (id: string) => void;
     onUpdateViewTypeAngle: (id: string, angle: number) => void;
     onUnlinkNode: (viewTypeId: string, nodeId: string) => void;
 }
@@ -110,6 +111,7 @@ export const CircleOverlay: React.FC<CircleOverlayProps> = ({
     ecoreNodes,
     onAddViewType,
     onDeleteViewType,
+    onEditViewQuery,
     onUnlinkNode,
     onUpdateViewTypeAngle,
 }) => {
@@ -380,6 +382,9 @@ export const CircleOverlay: React.FC<CircleOverlayProps> = ({
                     y={deletionMenu.y}
                     label={deletionMenu.label}
                     onDelete={() => onDeleteViewType(deletionMenu.id)}
+                    onEditQuery={onEditViewQuery
+                        ? () => onEditViewQuery(deletionMenu.id)
+                        : undefined}
                     onClose={() => setDeletionMenu(null)}
                 />
             )}

@@ -473,7 +473,7 @@ class ApiService {
     }
   }
 
-  async uploadFile(file: File, type: 'ECORE' | 'GEN_MODEL' | 'REACTION'): Promise<{ data: string; message: string }> {
+  async uploadFile(file: File, type: 'ECORE' | 'GEN_MODEL' | 'REACTION' | 'NEO_JOIN'): Promise<{ data: string; message: string }> {
     const token = await AuthService.ensureValidToken();
 
     if (!token) {
@@ -942,7 +942,7 @@ class ApiService {
   private async updateUploadedFile(
     fileId: number | string,
     file: File,
-    endpointSuffix: 'update-reaction' | 'update-ecore',
+    endpointSuffix: 'update-reaction' | 'update-ecore' | 'update-neojoin',
     logLabel: string,
   ): Promise<{ data: string; message: string }> {
     const token = await AuthService.ensureValidToken();
@@ -1016,6 +1016,13 @@ class ApiService {
     file: File,
   ): Promise<{ data: string; message: string }> {
     return this.updateUploadedFile(fileId, file, 'update-ecore', 'Update ecore file');
+  }
+
+  async updateNeoJoinFile(
+    fileId: number | string,
+    file: File,
+  ): Promise<{ data: string; message: string }> {
+    return this.updateUploadedFile(fileId, file, 'update-neojoin', 'Update NeoJoin file');
   }
 
   // Removed unused getBaseURL and setBaseURL helpers
@@ -1278,7 +1285,20 @@ export interface MetaModelRelationRequest {
   fineGranularMetaModelRelationSet?: import('../types/FineGranularMetaModelRelation').EditableFineGranularMetaModelRelation[];
 }
 
+export interface ViewRequest {
+  /** Existing view. Omitted when the view is created by this request. */
+  id?: number | null;
+  /** Unique within the VSUM. Omitted to keep the current name. */
+  name?: string | null;
+  description?: string | null;
+  /** Source ids of the metamodels this view uses. */
+  metaModelIds: number[];
+  fileStorageId: number;
+}
+
 export interface VsumSyncChangesPutRequest {
   metaModelIds: number[];
   metaModelRelationRequests: MetaModelRelationRequest[] | null; // you said null for now
+  /** Full view list. An empty list deletes every view; omitting the field leaves views unchanged. */
+  viewRequests?: ViewRequest[];
 }
