@@ -216,7 +216,10 @@ export function collectNodeFollowChanges(args: {
   ));
   if (bboxDraggingIds.size > 0 || bboxMoved) {
     const childMoves = buildBboxChildDragChanges(clampedChanges, liveNodes);
-    if (childMoves.length > 0) return childMoves;
+    if (childMoves.length > 0) {
+      const moved = applyNodeChangesToSnapshot(liveNodes, [...clampedChanges, ...childMoves]);
+      return [...childMoves, ...ghostPositionChanges(moved, edges)];
+    }
   }
 
   const extraChanges = buildBboxFollowChanges(clampedChanges, liveNodes);

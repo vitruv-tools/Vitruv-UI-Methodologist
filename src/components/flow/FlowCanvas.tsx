@@ -20,6 +20,7 @@ import { useFlowState } from '../../hooks/useFlowState';
 import { useDragAndDrop } from '../../hooks/useDragAndDrop';
 import { EditableNode } from './EditableNode';
 import { UMLRelationship } from './UMLRelationship';
+import { layoutExpandedUmlEdges } from '../../utils/expandedUmlLayout';
 import { ReactionRelationship } from './ReactionRelationship';
 import { EcoreFileBox } from './EcoreFileBox';
 import { metaModelDisplayColor } from '../../utils/metaModelColors';
@@ -1554,6 +1555,15 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       [nodes, uniqueEdges],
     );
 
+    const expandedUmlLayouts = useMemo(
+      () => layoutExpandedUmlEdges(nodes, uniqueEdges),
+      [nodes, uniqueEdges],
+    );
+    const resolveExpandedUmlLayout = useCallback(
+      (edge: Edge) => expandedUmlLayouts.get(edge.id),
+      [expandedUmlLayouts],
+    );
+
     const resolveReactionRoute = useCallback(
       (edge: Edge) => reactionRoutes.get(edge.id),
       [reactionRoutes],
@@ -1574,6 +1584,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       handleEdgeReorderRequest,
       getFineParallel: resolveFineParallel,
       getReactionRoute: resolveReactionRoute,
+      getExpandedUmlLayout: resolveExpandedUmlLayout,
     }), [
       editable,
       routingStyle,
@@ -1589,6 +1600,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       handleEdgeReorderRequest,
       resolveFineParallel,
       resolveReactionRoute,
+      resolveExpandedUmlLayout,
     ]);
 
     const mappedEdges = useMemo(

@@ -144,6 +144,16 @@ function mapContext(overrides: Partial<MapFlowEdgeContext> = {}): MapFlowEdgeCon
 }
 
 describe('mapFlowCanvasEdge fine-granular parallel meta', () => {
+  it('preserves UML parallel metadata and passes the shared expanded layout to the renderer', () => {
+    const edge: Edge = { id: 'uml-1', source: 'a', target: 'b', type: 'uml',
+      data: { expandedIntraModel: true, parallelIndex: 1, parallelCount: 3 } };
+    const layout = { points: [{ x: 0, y: 0 }, { x: 100, y: 0 }], midpoint: { x: 50, y: 0 } };
+    const mapped = mapFlowCanvasEdge(edge, mapContext({ getExpandedUmlLayout: () => layout }));
+    expect(mapped.data.parallelIndex).toBe(1);
+    expect(mapped.data.parallelCount).toBe(3);
+    expect(mapped.data.expandedLayout).toBe(layout);
+    expect(mapped.data.routeWaypoints).toBe(layout.points);
+  });
   it('stamps parallelCount from the fine-edge indexer', () => {
     const edge = {
       id: 'fg-1',

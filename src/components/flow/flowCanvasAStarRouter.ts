@@ -90,7 +90,8 @@ export function nodeWorldRect(node: Node, byId?: Map<string, Node>): Rect | null
   return {
     x: pos.x,
     y: pos.y,
-    width: typeof node.width === 'number' && node.width > 0 ? node.width : size.width,
+    width: typeof node.width === 'number' && node.width > 0 ? node.width
+      : typeof node.style?.width === 'number' ? node.style.width : size.width,
     height: typeof node.height === 'number' && node.height > 0 ? node.height : size.height,
   };
 }
@@ -200,14 +201,25 @@ export function pickSideFromPoint(rect: Rect, point: Point): Side {
 }
 
 export function segmentCrossesRect(a: Point, b: Point, rect: Rect): boolean {
-  const steps = 6;
-  for (let s = 1; s < steps; s++) {
-    const t = s / steps;
-    if (pointInRect({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }, rect)) {
-      return true;
+  // Sampling can miss a whole class on a long segment, allowing route
+  // simplification to replace a safe detour with a line through that class.
+  let lo = 0;
+  let hi = 1;
+  for (const [start, delta, min, max] of [
+    [a.x, b.x - a.x, rect.x + 0.01, rect.x + rect.width - 0.01],
+    [a.y, b.y - a.y, rect.y + 0.01, rect.y + rect.height - 0.01],
+  ]) {
+    if (Math.abs(delta) < 0.00001) {
+      if (start < min || start > max) return false;
+    } else {
+      const t1 = (min - start) / delta;
+      const t2 = (max - start) / delta;
+      lo = Math.max(lo, Math.min(t1, t2));
+      hi = Math.min(hi, Math.max(t1, t2));
+      if (lo > hi) return false;
     }
   }
-  return false;
+  return true;
 }
 
 export function polylineHitsRects(points: Point[], rects: Rect[]): boolean {
@@ -489,6 +501,57 @@ class MinHeap {
     this.values[a] = this.values[b];
     this.values[b] = tv;
   }
+}
+
+/** Precise fallback for expanded UML routes whose coarse-grid joins cross a class. */
+export function routeAroundClassRects(start: Point, end: Point, rects: Rect[]): Point[] | null {
+  // Coordinates follow rectangle edges, so narrow classes cannot disappear
+  // between grid samples when a diagram is tall or wide.
+  const xs = [...new Set([start.x, end.x, ...rects.flatMap(rect =>
+    [rect.x - 12, rect.x + rect.width + 12])])].sort((a, b) => a - b);
+  const ys = [...new Set([start.y, end.y, ...rects.flatMap(rect =>
+    [rect.y - 12, rect.y + rect.height + 12])])].sort((a, b) => a - b);
+  const cols = xs.length;
+  const size = cols * ys.length;
+  const from = ys.indexOf(start.y) * cols + xs.indexOf(start.x);
+  const to = ys.indexOf(end.y) * cols + xs.indexOf(end.x);
+  const point = (index: number): Point => ({ x: xs[index % cols], y: ys[Math.floor(index / cols)] });
+  const distance = new Float64Array(size).fill(Infinity);
+  const previous = new Int32Array(size).fill(-1);
+  const seen = new Uint8Array(size);
+  const open = new MinHeap();
+  distance[from] = 0;
+  open.push(0, from);
+  while (open.size > 0) {
+    const current = open.pop()!;
+    if (seen[current]) continue;
+    if (current === to) {
+      const points: Point[] = [];
+      for (let at = current; at !== -1; at = previous[at]) points.push(point(at));
+      return simplifyWorld(points.reverse());
+    }
+    seen[current] = 1;
+    const col = current % cols;
+    const row = Math.floor(current / cols);
+    const a = point(current);
+    const neighbors = [
+      col > 0 ? current - 1 : -1,
+      col + 1 < cols ? current + 1 : -1,
+      row > 0 ? current - cols : -1,
+      row + 1 < ys.length ? current + cols : -1,
+    ];
+    for (const next of neighbors) {
+      if (next < 0 || seen[next]) continue;
+      const b = point(next);
+      if (rects.some(rect => segmentCrossesRect(a, b, rect))) continue;
+      const cost = distance[current] + Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
+      if (cost >= distance[next]) continue;
+      distance[next] = cost;
+      previous[next] = current;
+      open.push(cost + Math.abs(b.x - end.x) + Math.abs(b.y - end.y), next);
+    }
+  }
+  return null;
 }
 
 function stateKey(i: number, j: number, dir: number, cols: number, rows: number): number {
