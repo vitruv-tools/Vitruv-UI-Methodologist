@@ -228,7 +228,11 @@ export const BuildProblemsDialog: React.FC<BuildProblemsDialogProps> = ({
   const panelRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const [copied, setCopied] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const failureKey = failure
+    ? `${failure.errorCode ?? ''}:${failure.message}:${failure.problems.length}`
+    : '';
+  const [noticeFor, setNoticeFor] = useState<{ key: string; text: string } | null>(null);
+  const notice = noticeFor?.key === failureKey ? noticeFor.text : null;
 
   const groups = useMemo(() => groupBuildProblems(failure?.problems ?? []), [failure]);
 
@@ -244,8 +248,7 @@ export const BuildProblemsDialog: React.FC<BuildProblemsDialogProps> = ({
 
   useEffect(() => {
     setCopied(false);
-    setNotice(null);
-  }, [failure]);
+  }, [failureKey]);
 
   if (!failure) return null;
 
@@ -275,7 +278,10 @@ export const BuildProblemsDialog: React.FC<BuildProblemsDialogProps> = ({
 
   const handleOpenProblem = onOpenProblem && ((problem: BuildProblem) => {
     if (!onOpenProblem(problem)) {
-      setNotice(`${problem.file ?? 'This file'} is not on the canvas of this project, so it cannot be opened from here.`);
+      setNoticeFor({
+        key: failureKey,
+        text: `${problem.file ?? 'This file'} is not on the canvas of this project, so it cannot be opened from here.`,
+      });
     }
   });
 
