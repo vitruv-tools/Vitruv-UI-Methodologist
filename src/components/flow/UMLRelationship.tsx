@@ -57,8 +57,8 @@ function calculateExpandedPath(layout: ExpandedUmlEdgeLayout): PathResult {
   const points = layout.points.map(point => ({ ...point }));
   const start = points[0];
   const next = points[1];
-  const end = points[points.length - 1];
-  const prev = points[points.length - 2];
+  const end = points.at(-1) ?? start;
+  const prev = points.at(-2) ?? start;
   const startDx = next.x - start.x;
   const startDy = next.y - start.y;
   const endDx = end.x - prev.x;
@@ -256,6 +256,15 @@ function calculateMultiplicityPosition(
   };
 }
 
+function calculateRelationshipPath(
+  params: PathParams & { parallelIndex: number; parallelCount: number; separation: number },
+  expandedLayout?: ExpandedUmlEdgeLayout,
+): PathResult {
+  if (expandedLayout) return calculateExpandedPath(expandedLayout);
+  if (params.controlPoint) return calculateControlPointPath(params);
+  return calculateStraightPath(params);
+}
+
 const MIDPOINT_GHOST_LABEL_CLEARANCE = 18;
 
 /** Shift a midpoint name off the association ghost, preferring above the line. */
@@ -371,7 +380,7 @@ export function UMLRelationship({
   const tgtBorder = getBorderPoint(tgtCx, tgtCy, nodeBounds.tgtW, nodeBounds.tgtH, srcCx, srcCy);
   const expandedLayout = data?.expandedIntraModel ? data.expandedLayout : undefined;
   const routedStart = expandedLayout?.points[0];
-  const routedEnd = expandedLayout?.points[expandedLayout.points.length - 1];
+  const routedEnd = expandedLayout?.points.at(-1);
   const finalSourceX = routedStart?.x ?? srcBorder.x;
   const finalSourceY = routedStart?.y ?? srcBorder.y;
   const finalTargetX = routedEnd?.x ?? tgtBorder.x;
@@ -396,22 +405,15 @@ export function UMLRelationship({
   const distance = Math.hypot(dx, dy);
 
   // Routing: bezier when user has dragged a control point, straight line otherwise.
-  const pathResult: PathResult = expandedLayout ? calculateExpandedPath(expandedLayout) : controlPoint
-    ? calculateControlPointPath({
-        sourceX: drawSourceX, sourceY: drawSourceY,
-        targetX: drawTargetX, targetY: drawTargetY,
-        dx, dy, px, py, distance, controlPoint,
-        count, id,
-      })
-    : calculateStraightPath({
-        sourceX: drawSourceX, sourceY: drawSourceY,
-        targetX: drawTargetX, targetY: drawTargetY,
-        dx, dy, px, py, distance,
-        count, id,
-        parallelIndex: data?.parallelIndex ?? 0,
-        parallelCount: data?.parallelCount ?? count,
-        separation: data?.separation ?? 16,
-      });
+  const pathResult = calculateRelationshipPath({
+    sourceX: drawSourceX, sourceY: drawSourceY,
+    targetX: drawTargetX, targetY: drawTargetY,
+    dx, dy, px, py, distance, controlPoint,
+    count, id,
+    parallelIndex: data?.parallelIndex ?? 0,
+    parallelCount: data?.parallelCount ?? count,
+    separation: data?.separation ?? 16,
+  }, expandedLayout);
   
   const { edgePath, labelX, labelY, startSegDx, startSegDy, endSegDx, endSegDy } = pathResult;
 

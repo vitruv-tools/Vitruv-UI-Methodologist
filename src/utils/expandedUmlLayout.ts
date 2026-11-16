@@ -127,8 +127,7 @@ function multiplicityCandidates(points: Point[], atEnd: boolean): Point[] {
   return candidates;
 }
 
-/** Shared by the canvas, labels, and EReference reaction connection points. */
-export function layoutExpandedUmlEdges(nodes: Node[], edges: Edge[]): Map<string, ExpandedUmlEdgeLayout> {
+function expandedClassRects(nodes: Node[]): Map<string, Rect> {
   const byId = new Map(nodes.map(node => [node.id, node]));
   const classes = nodes.filter(node => node.type === 'eobject' && !node.hidden);
   const rects = new Map<string, Rect>();
@@ -136,70 +135,114 @@ export function layoutExpandedUmlEdges(nodes: Node[], edges: Edge[]): Map<string
     const rect = nodeWorldRect(node, byId);
     if (rect) rects.set(node.id, rect);
   }
-  const expanded = edges.filter(edge => edge.type === 'uml' && edge.data?.expandedIntraModel && !edge.hidden)
-    .slice().sort((a, b) => a.id.localeCompare(b.id));
-  const pairKey = (edge: Edge) => JSON.stringify([edge.source, edge.target].sort());
-  const pairs = new Map<string, Edge[]>();
-  for (const edge of expanded) {
-    const key = pairKey(edge);
-    pairs.set(key, [...(pairs.get(key) ?? []), edge]);
+  return rects;
+}
+
+function compareNodeIds(a: string, b: string): number {
+  const alphabetical = a.localeCompare(b);
+  if (alphabetical !== 0 || a === b) return alphabetical;
+  // Distinct identifiers can collate equally; keep reciprocal pairs canonical.
+  return a < b ? -1 : 1;
+}
+
+function edgePairKey(edge: Edge): string {
+  return JSON.stringify([edge.source, edge.target].sort(compareNodeIds));
+}
+
+function selfReferencePoints(source: Rect, index: number): Point[] {
+  const lane = 60 + index * 40;
+  return [
+    { x: source.x + source.width, y: source.y + source.height / 2 },
+    { x: source.x + source.width + lane, y: source.y + source.height / 2 },
+    { x: source.x + source.width + lane, y: source.y - lane },
+    { x: source.x + source.width / 2, y: source.y - lane },
+    { x: source.x + source.width / 2, y: source.y },
+  ];
+}
+
+function expandedEdgeLayout(
+  edge: Edge,
+  rects: Map<string, Rect>,
+  pair: Edge[],
+  placed: Point[][],
+): ExpandedUmlEdgeLayout | undefined {
+  const source = rects.get(edge.source);
+  const target = rects.get(edge.target);
+  if (!source || !target) return undefined;
+  const index = pair.indexOf(edge);
+  if (edge.source === edge.target) {
+    const points = selfReferencePoints(source, index);
+    return { points, midpoint: midpoint(points) };
   }
-  const layouts = new Map<string, ExpandedUmlEdgeLayout>();
-  const placed: Point[][] = [];
-  for (const edge of expanded) {
-    const source = rects.get(edge.source);
-    const target = rects.get(edge.target);
-    if (!source || !target) continue;
-    const obstacles = [...rects].filter(([id]) => id !== edge.source && id !== edge.target).map(([, rect]) => rect);
-    const pair = pairs.get(pairKey(edge))!;
-    const index = pair.indexOf(edge);
-    let points = chord(source, target);
-    if (edge.source === edge.target) {
-      const lane = 60 + index * 40;
-      points = [
-        { x: source.x + source.width, y: source.y + source.height / 2 },
-        { x: source.x + source.width + lane, y: source.y + source.height / 2 },
-        { x: source.x + source.width + lane, y: source.y - lane },
-        { x: source.x + source.width / 2, y: source.y - lane },
-        { x: source.x + source.width / 2, y: source.y },
-      ];
-    } else if (pair.length > 1 || obstacles.some(rect => umlSegmentHitsRect(points[0], points[1], rect))) {
-      const input = { source, target, obstacles, existing: placed,
-        sourcePortT: (index + 1) / (pair.length + 1),
-        targetPortT: (index + 1) / (pair.length + 1),
-      };
-      points = routeOrthogonalAStar(input).points;
-      // Large models coarsen the routing grid. Verify the resulting segments
-      // before accepting a shortcut past a narrow class or an endpoint.
-      if (segments(points).some(({ a, b }) => [source, target, ...obstacles]
-        .some(rect => umlSegmentHitsRect(a, b, rect)))) {
-        points = routeAroundClassRects(points[0], points[points.length - 1],
-          [source, target, ...obstacles]) ?? points;
-      }
+  const obstacles = [...rects].filter(([id]) => id !== edge.source && id !== edge.target).map(([, rect]) => rect);
+  let points = chord(source, target);
+  if (pair.length > 1 || obstacles.some(rect => umlSegmentHitsRect(points[0], points[1], rect))) {
+    const input = { source, target, obstacles, existing: placed,
+      sourcePortT: (index + 1) / (pair.length + 1),
+      targetPortT: (index + 1) / (pair.length + 1),
+    };
+    points = routeOrthogonalAStar(input).points;
+    // Large models coarsen the routing grid. Verify the resulting segments
+    // before accepting a shortcut past a narrow class or an endpoint.
+    if (segments(points).some(({ a, b }) => [source, target, ...obstacles]
+      .some(rect => umlSegmentHitsRect(a, b, rect)))) {
+      points = routeAroundClassRects(points[0], points.at(-1) ?? points[0],
+        [source, target, ...obstacles]) ?? points;
     }
-    layouts.set(edge.id, { points, midpoint: midpoint(points) });
-    placed.push(points);
   }
+  return { points, midpoint: midpoint(points) };
+}
+
+function expandedLabelObstacles(
+  rects: Map<string, Rect>,
+  edges: Edge[],
+  layouts: Map<string, ExpandedUmlEdgeLayout>,
+): Rect[] {
   const occupied = [...rects.values()];
   // Association ghosts are interactive, so keep text clear of them too.
-  for (const edge of expanded) {
+  for (const edge of edges) {
     const layout = layouts.get(edge.id);
     if (layout && edge.data?.relationshipType !== 'inheritance') {
       occupied.push({ x: layout.midpoint.x - 10, y: layout.midpoint.y - 10, width: 20, height: 20 });
     }
   }
+  return occupied;
+}
+
+function placeExpandedEdgeLabels(edge: Edge, layout: ExpandedUmlEdgeLayout, occupied: Rect[]): void {
+  for (const key of ['sourceMultiplicity', 'targetMultiplicity'] as const) {
+    const text = edge.data?.[key];
+    if (text !== undefined && text !== null && text !== '') {
+      layout[key] = placeLabel(String(text), multiplicityCandidates(layout.points, key === 'targetMultiplicity'), occupied, true);
+    }
+  }
+  if (edge.data?.label) {
+    layout.name = placeLabel(String(edge.data.label), nameCandidates(layout.points), occupied);
+  }
+}
+
+/** Shared by the canvas, labels, and EReference reaction connection points. */
+export function layoutExpandedUmlEdges(nodes: Node[], edges: Edge[]): Map<string, ExpandedUmlEdgeLayout> {
+  const rects = expandedClassRects(nodes);
+  const expanded = edges.filter(edge => edge.type === 'uml' && edge.data?.expandedIntraModel && !edge.hidden)
+    .slice().sort((a, b) => a.id.localeCompare(b.id));
+  const pairs = new Map<string, Edge[]>();
+  for (const edge of expanded) {
+    const key = edgePairKey(edge);
+    pairs.set(key, [...(pairs.get(key) ?? []), edge]);
+  }
+  const layouts = new Map<string, ExpandedUmlEdgeLayout>();
+  const placed: Point[][] = [];
+  for (const edge of expanded) {
+    const layout = expandedEdgeLayout(edge, rects, pairs.get(edgePairKey(edge))!, placed);
+    if (!layout) continue;
+    layouts.set(edge.id, layout);
+    placed.push(layout.points);
+  }
+  const occupied = expandedLabelObstacles(rects, expanded, layouts);
   for (const edge of expanded) {
     const layout = layouts.get(edge.id);
-    if (!layout) continue;
-    for (const key of ['sourceMultiplicity', 'targetMultiplicity'] as const) {
-      const text = edge.data?.[key];
-      if (text !== undefined && text !== null && text !== '') {
-        layout[key] = placeLabel(String(text), multiplicityCandidates(layout.points, key === 'targetMultiplicity'), occupied, true);
-      }
-    }
-    if (edge.data?.label) {
-      layout.name = placeLabel(String(edge.data.label), nameCandidates(layout.points), occupied);
-    }
+    if (layout) placeExpandedEdgeLabels(edge, layout, occupied);
   }
   return layouts;
 }

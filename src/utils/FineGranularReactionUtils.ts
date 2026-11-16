@@ -459,9 +459,10 @@ export function isIntraModelUmlEdge(edge: Edge): boolean {
 
 function eobjectBox(node: Node): { x: number; y: number; width: number; height: number } {
   const attrCount = Array.isArray(node.data?.attributes) ? node.data.attributes.length : 0;
+  const defaultWidth = typeof node.style?.width === 'number' ? node.style.width : EOBJECT_DEFAULT_WIDTH;
   const width = typeof node.width === 'number' && node.width > 0
     ? node.width
-    : typeof node.style?.width === 'number' ? node.style.width : EOBJECT_DEFAULT_WIDTH;
+    : defaultWidth;
   const height = typeof node.height === 'number' && node.height > 0
     ? node.height
     : EOBJECT_HEADER_HEIGHT + attrCount * EOBJECT_ATTR_ROW_HEIGHT + 4;

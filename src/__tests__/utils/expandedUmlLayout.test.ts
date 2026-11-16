@@ -81,6 +81,17 @@ describe('expanded Reactions layout', () => {
     expect(new Set(layouts.map(layout => JSON.stringify(layout.midpoint))).size).toBe(3);
   });
 
+  it('groups reciprocal references for distinct class ids that collate equally', () => {
+    const first = '\u00c5';
+    const second = '\u212b';
+    const nodes = [classNode(first, 0, 0), classNode(second, 600, 0)];
+    const layouts = [...layoutExpandedUmlEdges(nodes, [
+      edge('forward', first, second), edge('reverse', second, first),
+    ]).values()];
+    expect(layouts).toHaveLength(2);
+    expect(new Set(layouts.map(layout => JSON.stringify(layout.midpoint))).size).toBe(2);
+  });
+
   it('recomputes deterministically after moving a class into an association', () => {
     const nodes = [classNode('a', 0, 0), classNode('b', 600, 0), classNode('c', 300, 200)];
     const edges = [edge('link', 'a', 'b')];

@@ -90,11 +90,11 @@ export function nodeWorldRect(node: Node, byId?: Map<string, Node>): Rect | null
   if (node.hidden) return null;
   const size = defaultNodeSize(node);
   const pos = nodeWorldPosition(node, byId);
+  const defaultWidth = typeof node.style?.width === 'number' ? node.style.width : size.width;
   return {
     x: pos.x,
     y: pos.y,
-    width: typeof node.width === 'number' && node.width > 0 ? node.width
-      : typeof node.style?.width === 'number' ? node.style.width : size.width,
+    width: typeof node.width === 'number' && node.width > 0 ? node.width : defaultWidth,
     height: typeof node.height === 'number' && node.height > 0 ? node.height : size.height,
   };
 }
@@ -506,6 +506,52 @@ class MinHeap {
   }
 }
 
+interface ClassRectSearch {
+  xs: number[];
+  ys: number[];
+  cols: number;
+  rects: Rect[];
+  end: Point;
+  distance: Float64Array;
+  previous: Int32Array;
+  seen: Uint8Array;
+  open: MinHeap;
+}
+
+function classRectPoint(search: ClassRectSearch, index: number): Point {
+  return { x: search.xs[index % search.cols], y: search.ys[Math.floor(index / search.cols)] };
+}
+
+function classRectNeighbors(current: number, cols: number, rows: number): number[] {
+  const col = current % cols;
+  const row = Math.floor(current / cols);
+  return [
+    col > 0 ? current - 1 : -1,
+    col + 1 < cols ? current + 1 : -1,
+    row > 0 ? current - cols : -1,
+    row + 1 < rows ? current + cols : -1,
+  ];
+}
+
+function visitClassRectNeighbor(search: ClassRectSearch, current: number, next: number): void {
+  if (next < 0 || search.seen[next]) return;
+  const a = classRectPoint(search, current);
+  const b = classRectPoint(search, next);
+  if (search.rects.some(rect => segmentCrossesRect(a, b, rect))) return;
+  const cost = search.distance[current] + Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
+  if (cost >= search.distance[next]) return;
+  search.distance[next] = cost;
+  search.previous[next] = current;
+  search.open.push(cost + Math.abs(b.x - search.end.x) + Math.abs(b.y - search.end.y), next);
+}
+
+function classRectPath(search: ClassRectSearch, current: number): Point[] {
+  const points: Point[] = [];
+  for (let at = current; at !== -1; at = search.previous[at]) points.push(classRectPoint(search, at));
+  points.reverse();
+  return simplifyWorld(points);
+}
+
 /** Precise fallback for expanded UML routes whose coarse-grid joins cross a class. */
 export function routeAroundClassRects(start: Point, end: Point, rects: Rect[]): Point[] | null {
   // Coordinates follow rectangle edges, so narrow classes cannot disappear
@@ -518,40 +564,22 @@ export function routeAroundClassRects(start: Point, end: Point, rects: Rect[]): 
   const size = cols * ys.length;
   const from = ys.indexOf(start.y) * cols + xs.indexOf(start.x);
   const to = ys.indexOf(end.y) * cols + xs.indexOf(end.x);
-  const point = (index: number): Point => ({ x: xs[index % cols], y: ys[Math.floor(index / cols)] });
-  const distance = new Float64Array(size).fill(Infinity);
-  const previous = new Int32Array(size).fill(-1);
-  const seen = new Uint8Array(size);
-  const open = new MinHeap();
-  distance[from] = 0;
-  open.push(0, from);
-  while (open.size > 0) {
-    const current = open.pop()!;
-    if (seen[current]) continue;
-    if (current === to) {
-      const points: Point[] = [];
-      for (let at = current; at !== -1; at = previous[at]) points.push(point(at));
-      return simplifyWorld(points.reverse());
-    }
-    seen[current] = 1;
-    const col = current % cols;
-    const row = Math.floor(current / cols);
-    const a = point(current);
-    const neighbors = [
-      col > 0 ? current - 1 : -1,
-      col + 1 < cols ? current + 1 : -1,
-      row > 0 ? current - cols : -1,
-      row + 1 < ys.length ? current + cols : -1,
-    ];
-    for (const next of neighbors) {
-      if (next < 0 || seen[next]) continue;
-      const b = point(next);
-      if (rects.some(rect => segmentCrossesRect(a, b, rect))) continue;
-      const cost = distance[current] + Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
-      if (cost >= distance[next]) continue;
-      distance[next] = cost;
-      previous[next] = current;
-      open.push(cost + Math.abs(b.x - end.x) + Math.abs(b.y - end.y), next);
+  const search: ClassRectSearch = {
+    xs, ys, cols, rects, end,
+    distance: new Float64Array(size).fill(Infinity),
+    previous: new Int32Array(size).fill(-1),
+    seen: new Uint8Array(size),
+    open: new MinHeap(),
+  };
+  search.distance[from] = 0;
+  search.open.push(0, from);
+  while (search.open.size > 0) {
+    const current = search.open.pop()!;
+    if (search.seen[current]) continue;
+    if (current === to) return classRectPath(search, current);
+    search.seen[current] = 1;
+    for (const next of classRectNeighbors(current, cols, ys.length)) {
+      visitClassRectNeighbor(search, current, next);
     }
   }
   return null;

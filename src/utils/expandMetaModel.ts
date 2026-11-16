@@ -68,6 +68,29 @@ function umlRelationshipType(type: UMLRelType): string {
   return 'association';
 }
 
+function expandedClassGrid(classes: UMLClass[]) {
+  // A row starts below the tallest class in the preceding row.
+  const widths = classes.map(cls => Math.max(NODE_WIDTH,
+    60 + Math.max(cls.name.length + (cls.isAbstract || cls.isInterface ? 14 : 0),
+      ...cls.attributes.map(a => `${a.name}: ${normalizeAttributeTypeDisplay(a.type)} [1..1]`.length)) * 7));
+  const heights = classes.map(cls => NODE_HEADER_HEIGHT + cls.attributes.length * NODE_ATTR_ROW_HEIGHT + 4);
+  const columnWidths = Array.from({ length: COLUMNS }, (_, col) =>
+    Math.max(NODE_WIDTH, ...widths.filter((_, idx) => idx % COLUMNS === col)));
+  const rowTops: number[] = [];
+  for (let idx = 0, top = BBOX_PADDING_TOP; idx < heights.length; idx += COLUMNS) {
+    rowTops.push(top);
+    top += Math.max(...heights.slice(idx, idx + COLUMNS)) + NODE_GAP_Y;
+  }
+  return { widths, heights, columnWidths, rowTops };
+}
+
+function alignAssociationGhosts(eObjectNodes: Node[], ghostNodes: Node[], umlEdges: Edge[]): void {
+  for (const change of ghostPositionChanges([...eObjectNodes, ...ghostNodes], umlEdges)) {
+    const ghost = ghostNodes.find(node => node.id === change.id);
+    if (ghost) ghost.position = change.position;
+  }
+}
+
 /**
  * Expand a meta-model (.ecore file) into React Flow nodes for the canvas.
  */
@@ -100,19 +123,7 @@ export function expandMetaModelToNodes(
   let maxX = 0;
   let maxY = 0;
 
-  // A row starts below the tallest class in the preceding row. Multiplying
-  // the row index by each class's own height can place later rows on top of it.
-  const widths = umlModel.classes.map(cls => Math.max(NODE_WIDTH,
-    60 + Math.max(cls.name.length + (cls.isAbstract || cls.isInterface ? 14 : 0),
-      ...cls.attributes.map(a => `${a.name}: ${normalizeAttributeTypeDisplay(a.type)} [1..1]`.length)) * 7));
-  const heights = umlModel.classes.map(cls => NODE_HEADER_HEIGHT + cls.attributes.length * NODE_ATTR_ROW_HEIGHT + 4);
-  const columnWidths = Array.from({ length: COLUMNS }, (_, col) =>
-    Math.max(NODE_WIDTH, ...widths.filter((_, idx) => idx % COLUMNS === col)));
-  const rowTops: number[] = [];
-  for (let idx = 0, top = BBOX_PADDING_TOP; idx < heights.length; idx += COLUMNS) {
-    rowTops.push(top);
-    top += Math.max(...heights.slice(idx, idx + COLUMNS)) + NODE_GAP_Y;
-  }
+  const { widths, heights, columnWidths, rowTops } = expandedClassGrid(umlModel.classes);
 
   umlModel.classes.forEach((cls: UMLClass, idx: number) => {
     const col = idx % COLUMNS;
@@ -259,10 +270,7 @@ export function expandMetaModelToNodes(
     selectable: true,
   };
 
-  for (const change of ghostPositionChanges([...eObjectNodes, ...ghostNodes], umlEdges)) {
-    const ghost = ghostNodes.find(node => node.id === change.id);
-    if (ghost) ghost.position = change.position;
-  }
+  alignAssociationGhosts(eObjectNodes, ghostNodes, umlEdges);
   return { boundingBox, eObjectNodes, umlEdges, ghostNodes, modelNsUri: nsUri };
 }
 
