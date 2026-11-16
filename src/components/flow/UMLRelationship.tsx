@@ -1,6 +1,8 @@
 import React from 'react';
 import { EdgeProps, EdgeLabelRenderer, useStore } from 'reactflow';
 import { getBorderPoint } from '../../utils/reactionEdgeGeometry';
+import type { ExpandedUmlEdgeLayout } from '../../utils/expandedUmlLayout';
+import { polylinePathD } from './flowCanvasAStarRouter';
 
 interface UMLRelationshipData {
   label?: string;
@@ -19,6 +21,7 @@ interface UMLRelationshipData {
   mergeGroupSourceNodes?: string[];
   hoveredMergeGroup?: string | null;
   expandedIntraModel?: boolean;
+  expandedLayout?: ExpandedUmlEdgeLayout;
   onMergeGroupHover?: (groupId: string | null) => void;
 }
 
@@ -48,6 +51,28 @@ interface PathParams {
   isFirstInMergeGroup?: boolean;
   count: number;
   id: string;
+}
+
+function calculateExpandedPath(layout: ExpandedUmlEdgeLayout): PathResult {
+  const points = layout.points.map(point => ({ ...point }));
+  const start = points[0];
+  const next = points[1];
+  const end = points[points.length - 1];
+  const prev = points[points.length - 2];
+  const startDx = next.x - start.x;
+  const startDy = next.y - start.y;
+  const endDx = end.x - prev.x;
+  const endDy = end.y - prev.y;
+  const startLength = Math.max(Math.hypot(startDx, startDy), 0.001);
+  const endLength = Math.max(Math.hypot(endDx, endDy), 0.001);
+  const startInset = Math.min(EDGE_ENDPOINT_INSET, startLength / 3);
+  const endInset = Math.min(EDGE_ENDPOINT_INSET, endLength / 3);
+  start.x += startDx / startLength * startInset;
+  start.y += startDy / startLength * startInset;
+  end.x -= endDx / endLength * endInset;
+  end.y -= endDy / endLength * endInset;
+  return { edgePath: polylinePathD(points), labelX: layout.midpoint.x, labelY: layout.midpoint.y,
+    startSegDx: startDx, startSegDy: startDy, endSegDx: endDx, endSegDy: endDy };
 }
 
 // Helper: Quadratic bezier when user has manually dragged the control point
@@ -344,10 +369,13 @@ export function UMLRelationship({
   // ── Connection points: exact border intersection (jjodel style) ──────────
   const srcBorder = getBorderPoint(srcCx, srcCy, nodeBounds.srcW, nodeBounds.srcH, tgtCx, tgtCy);
   const tgtBorder = getBorderPoint(tgtCx, tgtCy, nodeBounds.tgtW, nodeBounds.tgtH, srcCx, srcCy);
-  const finalSourceX = srcBorder.x;
-  const finalSourceY = srcBorder.y;
-  const finalTargetX = tgtBorder.x;
-  const finalTargetY = tgtBorder.y;
+  const expandedLayout = data?.expandedIntraModel ? data.expandedLayout : undefined;
+  const routedStart = expandedLayout?.points[0];
+  const routedEnd = expandedLayout?.points[expandedLayout.points.length - 1];
+  const finalSourceX = routedStart?.x ?? srcBorder.x;
+  const finalSourceY = routedStart?.y ?? srcBorder.y;
+  const finalTargetX = routedEnd?.x ?? tgtBorder.x;
+  const finalTargetY = routedEnd?.y ?? tgtBorder.y;
   // ─────────────────────────────────────────────────────────────────────────
 
   const dx = finalTargetX - finalSourceX;
@@ -368,7 +396,7 @@ export function UMLRelationship({
   const distance = Math.hypot(dx, dy);
 
   // Routing: bezier when user has dragged a control point, straight line otherwise.
-  const pathResult: PathResult = controlPoint
+  const pathResult: PathResult = expandedLayout ? calculateExpandedPath(expandedLayout) : controlPoint
     ? calculateControlPointPath({
         sourceX: drawSourceX, sourceY: drawSourceY,
         targetX: drawTargetX, targetY: drawTargetY,
@@ -399,18 +427,23 @@ export function UMLRelationship({
 
   const directionMarkerSide = getDirectionMarkerSide(data?.relationshipType);
   const directionMarkerColor = getHighlightColor(isHighlighted, isHovered);
-  const directionMarkerAngle = Math.atan2(dy, dx) * (180 / Math.PI);
+  const markerDx = directionMarkerSide === 'start' ? startSegDx : endSegDx;
+  const markerDy = directionMarkerSide === 'start' ? startSegDy : endSegDy;
+  const markerLength = Math.max(Math.hypot(markerDx, markerDy), 0.001);
+  const markerUx = markerDx / markerLength;
+  const markerUy = markerDy / markerLength;
+  const directionMarkerAngle = Math.atan2(markerDy, markerDx) * (180 / Math.PI);
   const directionMarkerLineAnchor = directionMarkerSide
     ? {
-        x: directionMarkerSide === 'start' ? drawSourceX : drawTargetX,
-        y: directionMarkerSide === 'start' ? drawSourceY : drawTargetY,
+        x: directionMarkerSide === 'start' ? finalSourceX + markerUx * endpointInset : finalTargetX - markerUx * endpointInset,
+        y: directionMarkerSide === 'start' ? finalSourceY + markerUy * endpointInset : finalTargetY - markerUy * endpointInset,
       }
     : null;
   const directionMarkerPos = directionMarkerSide && directionMarkerLineAnchor && data?.relationshipType
     ? directionMarkerAnchor(
         directionMarkerLineAnchor,
-        ux,
-        uy,
+        markerUx,
+        markerUy,
         directionMarkerSide,
         directionMarkerSize(data.relationshipType),
       )
@@ -429,9 +462,9 @@ export function UMLRelationship({
   const liftNameOffGhost = data?.expandedIntraModel === true
     && data?.relationshipType !== 'inheritance'
     && relationshipLabel.length > 0;
-  const namePos = liftNameOffGhost
+  const namePos = expandedLayout?.name ?? (liftNameOffGhost
     ? offsetLabelAwayFromGhost(labelX, labelY, px, py)
-    : { x: labelX, y: labelY };
+    : { x: labelX, y: labelY });
 
 
   return (
@@ -465,6 +498,7 @@ export function UMLRelationship({
       {/* Main edge stroke — pure straight line, jjodel style */}
       <path
         id={id}
+        data-testid={`${id}-path`}
         style={{ ...getRelationshipStyle(), strokeLinecap: 'round', strokeLinejoin: 'round' }}
         d={edgePath}
         onClick={handleClick}
@@ -553,11 +587,12 @@ export function UMLRelationship({
         {/* Multiplicity badges — always painted above every node box */}
         {(data?.sourceMultiplicity !== undefined && data?.sourceMultiplicity !== null && data?.sourceMultiplicity !== '') && (() => {
           const srcMult = String(data.sourceMultiplicity);
-          const sp = calculateMultiplicityPosition(finalSourceX, finalSourceY, startSegDx, startSegDy, 'start');
+          const sp = expandedLayout?.sourceMultiplicity ?? calculateMultiplicityPosition(finalSourceX, finalSourceY, startSegDx, startSegDy, 'start');
           const edgeColor = getHighlightColor(isHighlighted, isHovered);
           return (
             <div
               key={`${id}-src-mult`}
+              data-testid={`${id}-src-mult`}
               onMouseEnter={() => setIsHovered(true)}
               onMouseLeave={() => setIsHovered(false)}
               style={{
@@ -587,11 +622,12 @@ export function UMLRelationship({
 
         {(data?.targetMultiplicity !== undefined && data?.targetMultiplicity !== null && data?.targetMultiplicity !== '') && (() => {
           const tgtMult = String(data.targetMultiplicity);
-          const tp = calculateMultiplicityPosition(finalTargetX, finalTargetY, endSegDx, endSegDy, 'end');
+          const tp = expandedLayout?.targetMultiplicity ?? calculateMultiplicityPosition(finalTargetX, finalTargetY, endSegDx, endSegDy, 'end');
           const edgeColor = getHighlightColor(isHighlighted, isHovered);
           return (
             <div
               key={`${id}-tgt-mult`}
+              data-testid={`${id}-tgt-mult`}
               onMouseEnter={() => setIsHovered(true)}
               onMouseLeave={() => setIsHovered(false)}
               style={{

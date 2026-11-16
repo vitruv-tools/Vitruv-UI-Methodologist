@@ -1,6 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { UMLRelationship } from '../../../components/flow/UMLRelationship';
+import type { Position } from 'reactflow';
 
 vi.mock('reactflow', () => ({
   __esModule: true,
@@ -14,6 +15,26 @@ vi.mock('reactflow', () => ({
 }));
 
 describe('UMLRelationship', () => {
+  it('draws routed expanded associations and uses collision-free label positions and the final arrow direction', () => {
+    const layout = {
+      points: [{ x: 200, y: 50 }, { x: 250, y: 50 }, { x: 250, y: 200 }],
+      midpoint: { x: 250, y: 125 },
+      name: { x: 290, y: 125, width: 60, height: 20 },
+      sourceMultiplicity: { x: 225, y: 20, width: 24, height: 26 },
+      targetMultiplicity: { x: 280, y: 170, width: 40, height: 26 },
+    };
+    render(<svg><UMLRelationship id="routed" source="a" target="b"
+      sourceX={0} sourceY={0} targetX={300} targetY={200} selected={false}
+      sourcePosition={'right' as Position} targetPosition={'top' as Position}
+      data={{ relationshipType: 'association', label: 'books', sourceMultiplicity: '1', targetMultiplicity: '0..*',
+        expandedIntraModel: true, expandedLayout: layout }} /></svg>);
+    expect(screen.getByTestId('routed-path')).toHaveAttribute('d', 'M 208,50 L 250,50 L 250,192');
+    expect(screen.getByTestId('routed-association-name').style.transform).toContain('290px, 125px');
+    expect(screen.getByTestId('routed-src-mult').style.transform).toContain('225px, 20px');
+    expect(screen.getByTestId('routed-tgt-mult').style.transform).toContain('280px, 170px');
+    expect(screen.getByTestId('routed-direction-marker').style.transform).toContain('rotate(90deg)');
+    expect(layout.points[0]).toEqual({ x: 200, y: 50 });
+  });
   it('renders edge path and label', () => {
     const { container } = render(
       <svg>

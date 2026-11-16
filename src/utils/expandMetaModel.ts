@@ -25,6 +25,7 @@ import { metaModelDisplayColor } from './metaModelColors';
 import {
   createGhostNode,
   midpointForEobjectPair,
+  ghostPositionChanges,
 } from './FineGranularReactionUtils';
 
 export interface ExpandedMetaModelResult {
@@ -38,8 +39,8 @@ export interface ExpandedMetaModelResult {
 const NODE_WIDTH = 200;
 const NODE_HEADER_HEIGHT = 32;
 const NODE_ATTR_ROW_HEIGHT = 24;
-const NODE_GAP_X = 50;
-const NODE_GAP_Y = 40;
+const NODE_GAP_X = 100;
+const NODE_GAP_Y = 90;
 const BBOX_PADDING_TOP = 70;
 const BBOX_PADDING_SIDE = 50;
 const BBOX_PADDING_BOTTOM = 40;
@@ -99,13 +100,28 @@ export function expandMetaModelToNodes(
   let maxX = 0;
   let maxY = 0;
 
+  // A row starts below the tallest class in the preceding row. Multiplying
+  // the row index by each class's own height can place later rows on top of it.
+  const widths = umlModel.classes.map(cls => Math.max(NODE_WIDTH,
+    60 + Math.max(cls.name.length + (cls.isAbstract || cls.isInterface ? 14 : 0),
+      ...cls.attributes.map(a => `${a.name}: ${normalizeAttributeTypeDisplay(a.type)} [1..1]`.length)) * 7));
+  const heights = umlModel.classes.map(cls => NODE_HEADER_HEIGHT + cls.attributes.length * NODE_ATTR_ROW_HEIGHT + 4);
+  const columnWidths = Array.from({ length: COLUMNS }, (_, col) =>
+    Math.max(NODE_WIDTH, ...widths.filter((_, idx) => idx % COLUMNS === col)));
+  const rowTops: number[] = [];
+  for (let idx = 0, top = BBOX_PADDING_TOP; idx < heights.length; idx += COLUMNS) {
+    rowTops.push(top);
+    top += Math.max(...heights.slice(idx, idx + COLUMNS)) + NODE_GAP_Y;
+  }
+
   umlModel.classes.forEach((cls: UMLClass, idx: number) => {
     const col = idx % COLUMNS;
     const row = Math.floor(idx / COLUMNS);
 
-    const nodeHeight = NODE_HEADER_HEIGHT + cls.attributes.length * NODE_ATTR_ROW_HEIGHT + 4;
-    const x = BBOX_PADDING_SIDE + col * (NODE_WIDTH + NODE_GAP_X);
-    const y = BBOX_PADDING_TOP + row * (nodeHeight + NODE_GAP_Y);
+    const nodeHeight = heights[idx];
+    const nodeWidth = widths[idx];
+    const x = BBOX_PADDING_SIDE + columnWidths.slice(0, col).reduce((sum, width) => sum + width + NODE_GAP_X, 0);
+    const y = rowTops[row];
 
     const eObjectId = buildEObjectId(nsUri, cls.name);
     const ecoreData: FlowNodeECoreData = {
@@ -138,12 +154,13 @@ export function expandMetaModelToNodes(
         modelAlias,
       },
       draggable: true,
+      style: { width: nodeWidth },
     };
 
     eObjectNodes.push(node);
     nodeByClassId.set(cls.id, node);
 
-    const nodeRight = x + NODE_WIDTH;
+    const nodeRight = x + nodeWidth;
     const nodeBottom = y + nodeHeight;
     if (nodeRight > maxX) maxX = nodeRight;
     if (nodeBottom > maxY) maxY = nodeBottom;
@@ -242,6 +259,10 @@ export function expandMetaModelToNodes(
     selectable: true,
   };
 
+  for (const change of ghostPositionChanges([...eObjectNodes, ...ghostNodes], umlEdges)) {
+    const ghost = ghostNodes.find(node => node.id === change.id);
+    if (ghost) ghost.position = change.position;
+  }
   return { boundingBox, eObjectNodes, umlEdges, ghostNodes, modelNsUri: nsUri };
 }
 
@@ -268,7 +289,7 @@ export function nextBoundingBoxOrigin(
  * Tight bounding-box rect around EObject children (absolute positions).
  */
 export function computeBoundingBoxRect(
-  children: Array<{ position: { x: number; y: number }; data?: { attributes?: unknown[] } }>,
+  children: Array<{ position: { x: number; y: number }; width?: number | null; height?: number | null; style?: { width?: string | number }; data?: { attributes?: unknown[] } }>,
 ): { x: number; y: number; width: number; height: number } | null {
   if (children.length === 0) return null;
 
@@ -282,10 +303,11 @@ export function computeBoundingBoxRect(
   let maxBottom = -Infinity;
 
   for (const child of children) {
-    const ch = 32 + (child.data?.attributes?.length ?? 0) * 24 + 4;
+    const ch = child.height ?? 32 + (child.data?.attributes?.length ?? 0) * 24 + 4;
+    const cw = child.width ?? (typeof child.style?.width === 'number' ? child.style.width : NODE_W);
     if (child.position.x < minX) minX = child.position.x;
     if (child.position.y < minY) minY = child.position.y;
-    const right = child.position.x + NODE_W;
+    const right = child.position.x + cw;
     const bottom = child.position.y + ch;
     if (right > maxRight) maxRight = right;
     if (bottom > maxBottom) maxBottom = bottom;

@@ -2,6 +2,7 @@ import React from 'react';
 import { Edge, Node, ReactFlowInstance } from 'reactflow';
 import { ConnectionDragState, HandlePosition, PendingDeleteState } from './flowCanvasTypes';
 import { FINE_REACTION_SEPARATION } from '../../utils/reactionEdgeGeometry';
+import type { ExpandedUmlEdgeLayout } from '../../utils/expandedUmlLayout';
 
 /**
  * Cursor communicating add-reaction mode: `cell` while waiting for the source
@@ -67,6 +68,7 @@ export interface MapFlowEdgeContext {
   handleEdgeRouteChange?: (edgeId: string, points: Array<{ x: number; y: number }>) => void;
   getFineParallel?: (edge: Edge) => { index: number; total: number } | undefined;
   getReactionRoute?: (edge: Edge) => { points: Array<{ x: number; y: number }> } | undefined;
+  getExpandedUmlLayout?: (edge: Edge) => ExpandedUmlEdgeLayout | undefined;
 }
 
 function reactionEdgeInteractionHandlers(
@@ -123,8 +125,8 @@ function fineReactionVisuals(
       fineGranular: false,
       sourceHandleId: undefined,
       targetHandleId: undefined,
-      parallelIndex: fineParallel?.index,
-      parallelCount: fineParallel?.total,
+      parallelIndex: edge.data?.parallelIndex,
+      parallelCount: edge.data?.parallelCount,
       separation: 36,
     };
   }
@@ -150,6 +152,7 @@ export function mapFlowCanvasEdge(edge: Edge, ctx: MapFlowEdgeContext): Edge {
   const isReaction = edge.type === 'reactions';
   const isFineReaction = edge.type === 'fine-granular-reaction';
   const isUml = edge.type === 'uml';
+  const expandedLayout = isUml && edge.data?.expandedIntraModel ? ctx.getExpandedUmlLayout?.(edge) : undefined;
 
   return {
     ...edge,
@@ -169,7 +172,8 @@ export function mapFlowCanvasEdge(edge: Edge, ctx: MapFlowEdgeContext): Edge {
       targetParallelIndex: targetData?.index,
       targetParallelCount: targetData?.total,
       customControlPoint: mappedCustomControlPoint(edge, isFineReaction),
-      routeWaypoints: (isReaction || isFineReaction) ? ctx.getReactionRoute?.(edge)?.points : undefined,
+      routeWaypoints: expandedLayout?.points ?? ((isReaction || isFineReaction) ? ctx.getReactionRoute?.(edge)?.points : undefined),
+      expandedLayout,
       ...reactionEdgeInteractionHandlers(edge.id, isReaction && !ctx.readOnly, ctx),
     },
     style: {

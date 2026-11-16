@@ -13,6 +13,7 @@ import { ActiveVsumDetails, hasActiveVsumDetailsStore } from '../store/ActiveVsu
 import { useSelectedEdgeStore } from '../store/SelectedEdge';
 import { extractModelFromEObjectId } from './EcoreIdentifiers';
 import { toWireReactionFileId } from './workspaceSnapshotUtils';
+import { layoutExpandedUmlEdges } from './expandedUmlLayout';
 import {
   EOBJECT_ATTR_ROW_HEIGHT,
   EOBJECT_DEFAULT_WIDTH,
@@ -460,7 +461,7 @@ function eobjectBox(node: Node): { x: number; y: number; width: number; height: 
   const attrCount = Array.isArray(node.data?.attributes) ? node.data.attributes.length : 0;
   const width = typeof node.width === 'number' && node.width > 0
     ? node.width
-    : EOBJECT_DEFAULT_WIDTH;
+    : typeof node.style?.width === 'number' ? node.style.width : EOBJECT_DEFAULT_WIDTH;
   const height = typeof node.height === 'number' && node.height > 0
     ? node.height
     : EOBJECT_HEADER_HEIGHT + attrCount * EOBJECT_ATTR_ROW_HEIGHT + 4;
@@ -534,7 +535,7 @@ export function createGhostNode(
 }
 
 /**
- * Keep association-midpoint ghosts on the chord between their two classes.
+ * Keep association ghosts on the same routed segment as the visible UML edge.
  * Returns extra position updates; does not add or remove ghosts.
  */
 export function ghostPositionChanges(
@@ -542,6 +543,7 @@ export function ghostPositionChanges(
   edges: Edge[],
 ): Array<{ type: 'position'; id: string; position: { x: number; y: number }; dragging: boolean }> {
   const byId = new Map(nodes.map(n => [n.id, n]));
+  const layouts = layoutExpandedUmlEdges(nodes, edges);
   const changes: Array<{
     type: 'position';
     id: string;
@@ -559,7 +561,10 @@ export function ghostPositionChanges(
     const source = byId.get(edge.source);
     const target = byId.get(edge.target);
     if (!ghost || !source || !target) continue;
-    const next = midpointForEobjectPair(source, target, edge.sourceHandle, edge.targetHandle);
+    const layout = layouts.get(edge.id);
+    const next = layout
+      ? { x: layout.midpoint.x - GHOST_NODE_SIZE / 2, y: layout.midpoint.y - GHOST_NODE_SIZE / 2 }
+      : midpointForEobjectPair(source, target, edge.sourceHandle, edge.targetHandle);
     if (
       Math.abs(ghost.position.x - next.x) > 0.5
       || Math.abs(ghost.position.y - next.y) > 0.5
