@@ -90,10 +90,11 @@ export function nodeWorldRect(node: Node, byId?: Map<string, Node>): Rect | null
   if (node.hidden) return null;
   const size = defaultNodeSize(node);
   const pos = nodeWorldPosition(node, byId);
+  const defaultWidth = typeof node.style?.width === 'number' ? node.style.width : size.width;
   return {
     x: pos.x,
     y: pos.y,
-    width: typeof node.width === 'number' && node.width > 0 ? node.width : size.width,
+    width: typeof node.width === 'number' && node.width > 0 ? node.width : defaultWidth,
     height: typeof node.height === 'number' && node.height > 0 ? node.height : size.height,
   };
 }
@@ -203,14 +204,25 @@ export function pickSideFromPoint(rect: Rect, point: Point): Side {
 }
 
 export function segmentCrossesRect(a: Point, b: Point, rect: Rect): boolean {
-  const steps = 6;
-  for (let s = 1; s < steps; s++) {
-    const t = s / steps;
-    if (pointInRect({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }, rect)) {
-      return true;
+  // Sampling can miss a whole class on a long segment, allowing route
+  // simplification to replace a safe detour with a line through that class.
+  let lo = 0;
+  let hi = 1;
+  for (const [start, delta, min, max] of [
+    [a.x, b.x - a.x, rect.x + 0.01, rect.x + rect.width - 0.01],
+    [a.y, b.y - a.y, rect.y + 0.01, rect.y + rect.height - 0.01],
+  ]) {
+    if (Math.abs(delta) < 0.00001) {
+      if (start < min || start > max) return false;
+    } else {
+      const t1 = (min - start) / delta;
+      const t2 = (max - start) / delta;
+      lo = Math.max(lo, Math.min(t1, t2));
+      hi = Math.min(hi, Math.max(t1, t2));
+      if (lo > hi) return false;
     }
   }
-  return false;
+  return true;
 }
 
 export function polylineHitsRects(points: Point[], rects: Rect[]): boolean {
@@ -492,6 +504,85 @@ class MinHeap {
     this.values[a] = this.values[b];
     this.values[b] = tv;
   }
+}
+
+interface ClassRectSearch {
+  xs: number[];
+  ys: number[];
+  cols: number;
+  rects: Rect[];
+  end: Point;
+  distance: Float64Array;
+  previous: Int32Array;
+  seen: Uint8Array;
+  open: MinHeap;
+}
+
+function classRectPoint(search: ClassRectSearch, index: number): Point {
+  return { x: search.xs[index % search.cols], y: search.ys[Math.floor(index / search.cols)] };
+}
+
+function classRectNeighbors(current: number, cols: number, rows: number): number[] {
+  const col = current % cols;
+  const row = Math.floor(current / cols);
+  return [
+    col > 0 ? current - 1 : -1,
+    col + 1 < cols ? current + 1 : -1,
+    row > 0 ? current - cols : -1,
+    row + 1 < rows ? current + cols : -1,
+  ];
+}
+
+function visitClassRectNeighbor(search: ClassRectSearch, current: number, next: number): void {
+  if (next < 0 || search.seen[next]) return;
+  const a = classRectPoint(search, current);
+  const b = classRectPoint(search, next);
+  if (search.rects.some(rect => segmentCrossesRect(a, b, rect))) return;
+  const cost = search.distance[current] + Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
+  if (cost >= search.distance[next]) return;
+  search.distance[next] = cost;
+  search.previous[next] = current;
+  search.open.push(cost + Math.abs(b.x - search.end.x) + Math.abs(b.y - search.end.y), next);
+}
+
+function classRectPath(search: ClassRectSearch, current: number): Point[] {
+  const points: Point[] = [];
+  for (let at = current; at !== -1; at = search.previous[at]) points.push(classRectPoint(search, at));
+  points.reverse();
+  return simplifyWorld(points);
+}
+
+/** Precise fallback for expanded UML routes whose coarse-grid joins cross a class. */
+export function routeAroundClassRects(start: Point, end: Point, rects: Rect[]): Point[] | null {
+  // Coordinates follow rectangle edges, so narrow classes cannot disappear
+  // between grid samples when a diagram is tall or wide.
+  const xs = [...new Set([start.x, end.x, ...rects.flatMap(rect =>
+    [rect.x - 12, rect.x + rect.width + 12])])].sort((a, b) => a - b);
+  const ys = [...new Set([start.y, end.y, ...rects.flatMap(rect =>
+    [rect.y - 12, rect.y + rect.height + 12])])].sort((a, b) => a - b);
+  const cols = xs.length;
+  const size = cols * ys.length;
+  const from = ys.indexOf(start.y) * cols + xs.indexOf(start.x);
+  const to = ys.indexOf(end.y) * cols + xs.indexOf(end.x);
+  const search: ClassRectSearch = {
+    xs, ys, cols, rects, end,
+    distance: new Float64Array(size).fill(Infinity),
+    previous: new Int32Array(size).fill(-1),
+    seen: new Uint8Array(size),
+    open: new MinHeap(),
+  };
+  search.distance[from] = 0;
+  search.open.push(0, from);
+  while (search.open.size > 0) {
+    const current = search.open.pop()!;
+    if (search.seen[current]) continue;
+    if (current === to) return classRectPath(search, current);
+    search.seen[current] = 1;
+    for (const next of classRectNeighbors(current, cols, ys.length)) {
+      visitClassRectNeighbor(search, current, next);
+    }
+  }
+  return null;
 }
 
 function stateKey(i: number, j: number, dir: number, cols: number, rows: number): number {

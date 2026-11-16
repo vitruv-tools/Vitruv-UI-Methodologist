@@ -1,5 +1,7 @@
 import type { Edge, Node } from 'reactflow';
 import { ghostPositionChanges } from './FineGranularReactionUtils';
+import { repairExpandedClassOverlaps } from './expandedUmlLayout';
+import { nodeWorldRect } from '../components/flow/flowCanvasAStarRouter';
 
 export const REACTION_LAYOUT_KEY_PREFIX = 'vitruv.reactions.layout.v1';
 
@@ -212,6 +214,15 @@ export function applyReactionLayout(
         y: node.position.y - origin.y + layout.bbox.y,
       };
     }
+  }
+  if (repairExpandedClassOverlaps(target.eObjectNodes)) {
+    const rects = target.eObjectNodes.map(node => nodeWorldRect(node)).filter(rect => rect !== null);
+    const width = Math.max(target.boundingBox.data?.width ?? 0,
+      ...rects.map(rect => rect!.x + rect!.width - target.boundingBox.position.x + 50));
+    const height = Math.max(target.boundingBox.data?.height ?? 0,
+      ...rects.map(rect => rect!.y + rect!.height - target.boundingBox.position.y + 40));
+    target.boundingBox.style = { ...target.boundingBox.style, width, height };
+    target.boundingBox.data = { ...target.boundingBox.data, width, height };
   }
   recomputeGhosts(target);
   return true;

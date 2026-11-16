@@ -51,6 +51,8 @@ const EObjectNode: React.FC<NodeProps<EObjectNodeData>> = ({ data, selected }) =
     <div
       style={{
         minWidth: 180,
+        width: '100%',
+        boxSizing: 'border-box',
         border: `1.5px solid ${borderColor}`,
         borderRadius: 6,
         background: 'var(--v-uml-box-bg)',

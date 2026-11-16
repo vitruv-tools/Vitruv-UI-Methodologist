@@ -21,6 +21,21 @@ const ecore = (id: string, x: number, y: number): Node =>
 const reaction = (id: string, source: string, target: string): Edge =>
   ({ id, source, target, type: 'reactions' } as Edge);
 
+describe('polylineHitsRects', () => {
+  it.each([
+    { start: { x: 0, y: 0 }, end: { x: 1000, y: 0 }, obstacle: box(101, -2, 4, 4) },
+    { start: { x: 0, y: 0 }, end: { x: 0, y: 1000 }, obstacle: box(-2, 101, 4, 4) },
+    { start: { x: 0, y: 0 }, end: { x: 1000, y: 1000 }, obstacle: box(101, 101, 4, 4) },
+  ])('detects a small obstacle between widely spaced points (%#)', ({ start, end, obstacle }) => {
+    expect(polylineHitsRects([start, end], [obstacle])).toBe(true);
+    expect(polylineHitsRects([end, start], [obstacle])).toBe(true);
+  });
+
+  it('allows a route to touch a class border without entering the class', () => {
+    expect(polylineHitsRects([{ x: 0, y: 0 }, { x: 1000, y: 0 }], [box(101, 0, 4, 4)])).toBe(false);
+  });
+});
+
 describe('facingSides', () => {
   it('attaches to the top of a box that sits below and to the left', () => {
     const upperRight = box(200, 0);
