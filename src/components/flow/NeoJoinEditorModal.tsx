@@ -13,9 +13,9 @@ export const neoJoinMonarch: languages.IMonarchLanguage & { keywords: string[] }
   tokenizer: {
     root: [
       [/[a-zA-Z_]\w*/, { cases: { '@keywords': 'keyword', '@default': 'identifier' } }],
-      [/\/\/.*$/, 'comment'],
+      [/\/\/.*/, 'comment'],
       [/\/\*/, 'comment', '@comment'],
-      [/"([^"\\]|\\.)*"/, 'string'],
+      [/"[^"\\]*(?:\\.[^"\\]*)*"/, 'string'],
       [/\d+/, 'number'],
     ],
     comment: [

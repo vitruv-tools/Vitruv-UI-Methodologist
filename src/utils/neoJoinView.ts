@@ -7,9 +7,18 @@ import { resolveReactionFileId } from './reactionFile';
 
 const NEO_JOIN_EXTENSION = '.nj';
 
+/** Removes leading and trailing underscores; a loop instead of a regex, which would backtrack. */
+function trimUnderscores(text: string): string {
+  let start = 0;
+  let end = text.length;
+  while (start < end && text[start] === '_') start++;
+  while (end > start && text[end - 1] === '_') end--;
+  return text.slice(start, end);
+}
+
 /** Matches the backend: a NeoJoin file name must start with a letter and may not contain spaces. */
 function toIdentifier(label: string): string {
-  const cleaned = label.trim().replaceAll(/[^A-Za-z0-9_]+/g, '_').replaceAll(/(?:^_+)|(?:_+$)/g, '');
+  const cleaned = trimUnderscores(label.replaceAll(/\W+/g, '_'));
   if (!cleaned) return 'View';
   return /^[A-Za-z]/.test(cleaned) ? cleaned : `View_${cleaned}`;
 }
