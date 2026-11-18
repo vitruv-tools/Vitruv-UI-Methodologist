@@ -23,6 +23,8 @@ export interface ViewType {
   query?: string;
   /** Stored NeoJoin file. */
   fileId?: number | null;
+  /** Stored `.nj` file name, used to match a build problem when the file id is absent. */
+  fileName?: string;
 }
 
 export function legacyViewTypesKey(vsumId: string): string {

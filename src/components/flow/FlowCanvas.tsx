@@ -47,6 +47,8 @@ import { prepareSnapshotForSyncSave } from '../../utils/workspaceSnapshotUtils';
 import { linkViewTypesToNodes, metamodelRefFromNode, toViewRequests } from '../../utils/viewTypeSync';
 
 import { CircleOverlay } from './canvas/CircleOverlay';
+import { countViewProblems } from '../../utils/neoJoinView';
+import type { BuildProblem } from '../../types/vsumBuild';
 import { CanvasControls } from './canvas/CanvasControls';
 import { CanvasDropOverlay } from './canvas/CanvasDropOverlay';
 import { CanvasMinimap } from './canvas/CanvasMinimap';
@@ -248,6 +250,11 @@ export interface FlowCanvasHandle {
   openReactionFileAt: (reactionFileId: number, position?: { lineNumber: number; column?: number }) => boolean;
   /** Selects and opens the metamodel whose ecore or genmodel file has this id; false if absent. */
   openMetaModelFile: (fileId: number) => boolean;
+  /**
+   * Opens the NeoJoin editor of the view type whose `.nj` file has this id, at `position` if given.
+   * Returns false if no view type on the canvas uses the file.
+   */
+  openViewTypeFileAt: (fileStorageId: number, position?: { lineNumber: number; column?: number }) => boolean;
   establishBaseline: () => void;
 }
 
@@ -289,6 +296,8 @@ interface FlowCanvasProps {
    * require a second click on the toolbar floppy.
    */
   onSaveChanges?: () => void;
+  /** Problems of the last failed build; those of NeoJoin files are marked on the view-type bubbles. */
+  buildProblems?: readonly BuildProblem[];
   /** When true, canvas is view-only (no edits, drag, connect, or delete). */
   readOnly?: boolean;
 }
@@ -353,6 +362,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       constraintFilterNodeId,
       onConstraintNodeFilter,
       onSaveChanges,
+      buildProblems,
       readOnly = false,
     },
     ref,
@@ -472,6 +482,10 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       updateViewTypeQuery,
       migrateLegacyViewTypes,
     } = useViewTypes(vsumId, () => syncBaseRef.current());
+    const viewProblemCounts = useMemo(
+      () => countViewProblems(buildProblems ?? [], viewTypes),
+      [buildProblems, viewTypes],
+    );
     const { getColorForPair } = useEdgeColorMap(userId, vsumId);
 
     // Ref flag: set just before setCircle() in autoLayoutEcoreBoxes so the effect
@@ -1283,7 +1297,10 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       });
     }, [addViewType, editable, nodes]);
 
-    const handleEditViewQuery = useCallback(async (viewTypeId: string) => {
+    const openViewTypeEditor = useCallback(async (
+      viewTypeId: string,
+      initialPosition?: NeoJoinEditorState['initialPosition'],
+    ) => {
       const viewType = viewTypes.find(vt => vt.id === viewTypeId);
       if (!viewType) return;
       let initialCode = viewType.query ?? '';
@@ -1304,10 +1321,23 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         label: viewType.label,
         initialCode,
         fileId: viewType.fileId ?? null,
+        initialPosition,
       });
     }, [viewTypes]);
 
-    const handleCloseNeoJoinEditor = useCallback(() => setNeoJoinEditor(null), []);
+    const handleEditViewQuery = useCallback((viewTypeId: string) => {
+      void openViewTypeEditor(viewTypeId);
+    }, [openViewTypeEditor]);
+
+    const openViewTypeFileAt = useCallback((
+      fileId: number,
+      position?: NeoJoinEditorState['initialPosition'],
+    ): boolean => {
+      const viewType = viewTypes.find(vt => vt.fileId === fileId);
+      if (!viewType) return false;
+      void openViewTypeEditor(viewType.id, position);
+      return true;
+    }, [viewTypes, openViewTypeEditor]);
 
     const handleSaveNeoJoin = useCallback(async (code: string) => {
       if (!neoJoinEditor) return;
@@ -1765,8 +1795,9 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       openSelectedReactionEditor,
       openReactionFileAt,
       openMetaModelFile,
+      openViewTypeFileAt,
       establishBaseline,
-    }), [handleToolClick, loadDiagramData, nodes, edges, viewTypes, addEcoreFile, updateEcoreDisplayName, updateEcoreFileData, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, getWorkspaceSnapshot, autoLayoutEcoreBoxes, fitUmlView, openSelectedReactionEditor, openReactionFileAt, openMetaModelFile, establishBaseline, locked]);
+    }), [openViewTypeFileAt, handleToolClick, loadDiagramData, nodes, edges, viewTypes, addEcoreFile, updateEcoreDisplayName, updateEcoreFileData, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, getWorkspaceSnapshot, autoLayoutEcoreBoxes, fitUmlView, openSelectedReactionEditor, openReactionFileAt, openMetaModelFile, establishBaseline, locked]);
 
     // ── Render mapping ────────────────────────────────────────────────────────
 
@@ -2049,6 +2080,8 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
             onEditViewQuery={handleEditViewQuery}
             onUpdateViewTypeAngle={editable ? updateAngle : () => {}}
             onUnlinkNode={editable ? unlinkNode : () => {}}
+            onEditViewType={(id) => { void openViewTypeEditor(id); }}
+            viewProblemCounts={viewProblemCounts}
           />
         )}
 
@@ -2090,22 +2123,45 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
 
         {isDragOver && <CanvasDropOverlay />}
 
+        {activeCanvasMode === 'views' && (
+          <div
+            role="note"
+            data-testid="views-build-hint"
+            style={{
+              position: 'absolute',
+              left: '50%',
+              bottom: 16,
+              transform: 'translateX(-50%)',
+              zIndex: 6,
+              padding: '6px 14px',
+              borderRadius: 999,
+              background: '#fffbeb',
+              border: '1px solid #fde68a',
+              color: '#92400e',
+              fontSize: 12,
+              fontWeight: 500,
+              pointerEvents: 'none',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Changes to views take effect only after a new build.
+          </div>
+        )}
+
+        <NeoJoinEditorModal
+          state={neoJoinEditor}
+          onClose={() => setNeoJoinEditor(null)}
+          onSave={readOnly ? async () => {} : handleSaveNeoJoin}
+          vsumId={vsumId}
+          readOnly={readOnly}
+        />
+
         {codeEditorState && (
           <ReactionEditorModal
             state={codeEditorState}
             onClose={handleCloseCodeEditor}
             onSave={readOnly ? async () => {} : handleSaveCode}
             onDelete={editable ? handleDeleteEdge : undefined}
-            vsumId={vsumId}
-            readOnly={readOnly}
-          />
-        )}
-
-        {neoJoinEditor && (
-          <NeoJoinEditorModal
-            state={neoJoinEditor}
-            onClose={handleCloseNeoJoinEditor}
-            onSave={readOnly ? async () => {} : handleSaveNeoJoin}
             vsumId={vsumId}
             readOnly={readOnly}
           />

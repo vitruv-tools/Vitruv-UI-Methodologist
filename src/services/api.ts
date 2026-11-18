@@ -1011,18 +1011,18 @@ class ApiService {
     return this.updateUploadedFile(fileId, file, 'update-reaction', 'Update reaction file');
   }
 
-  async updateEcoreFile(
-    fileId: number | string,
-    file: File,
-  ): Promise<{ data: string; message: string }> {
-    return this.updateUploadedFile(fileId, file, 'update-ecore', 'Update ecore file');
-  }
-
   async updateNeoJoinFile(
     fileId: number | string,
     file: File,
   ): Promise<{ data: string; message: string }> {
     return this.updateUploadedFile(fileId, file, 'update-neojoin', 'Update NeoJoin file');
+  }
+
+  async updateEcoreFile(
+    fileId: number | string,
+    file: File,
+  ): Promise<{ data: string; message: string }> {
+    return this.updateUploadedFile(fileId, file, 'update-ecore', 'Update ecore file');
   }
 
   // Removed unused getBaseURL and setBaseURL helpers

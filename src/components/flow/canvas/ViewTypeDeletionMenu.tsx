@@ -10,6 +10,10 @@ interface ViewTypeDeletionMenuProps {
     onDelete: () => void;
     onEditQuery?: () => void;
     onClose: () => void;
+    /** Opens the NeoJoin definition of the view type; used when Edit query is not passed. */
+    onEdit?: () => void;
+    /** Build problems found in the definition of this view type. */
+    problemCount?: number;
 }
 
 const BACKDROP_STYLE: React.CSSProperties = {
@@ -22,11 +26,11 @@ const BACKDROP_STYLE: React.CSSProperties = {
     padding: 0,
 };
 
-
 export const ViewTypeDeletionMenu: React.FC<ViewTypeDeletionMenuProps> = ({
-    x, y, label, onDelete, onEditQuery, onClose,
+    x, y, label, onDelete, onEditQuery, onClose, onEdit, problemCount = 0,
 }) => {
     const { ref: menuRef, style: menuStyle } = useAnchoredMenuPosition<HTMLDialogElement>(x, y);
+    const edit = onEditQuery ?? onEdit;
     return ReactDOM.createPortal(
     <>
         <button
@@ -54,11 +58,16 @@ export const ViewTypeDeletionMenu: React.FC<ViewTypeDeletionMenuProps> = ({
                     ×
                 </button>
             </div>
-            {onEditQuery && (
+            {problemCount > 0 && (
+                <div className="view-type-menu__problems">
+                    {problemCount === 1 ? '1 build problem' : `${problemCount} build problems`}
+                </div>
+            )}
+            {edit && (
                 <button
                     type="button"
                     className="view-type-menu__action"
-                    onClick={() => { onEditQuery(); onClose(); }}
+                    onClick={() => { edit(); onClose(); }}
                 >
                     Edit query
                 </button>

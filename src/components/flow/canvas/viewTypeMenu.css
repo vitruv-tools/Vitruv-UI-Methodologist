@@ -224,3 +224,10 @@
 .view-type-menu__action--danger:hover {
   background: var(--v-danger-bg);
 }
+
+.view-type-menu__problems {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--v-danger-text);
+  padding: 2px 8px;
+}

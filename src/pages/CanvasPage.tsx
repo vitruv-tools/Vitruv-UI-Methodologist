@@ -29,7 +29,8 @@ import { UtilityMethodsModal } from '../components/utilitymethods/UtilityMethods
 import { BuildProblemsDialog } from '../components/canvas/BuildProblemsDialog';
 import { ValidationProblemsDialog } from '../components/canvas/ValidationProblemsDialog';
 import type { BuildFailure, BuildProblem } from '../types/vsumBuild';
-import { buildFailureFromError, isReactionsProblem } from '../utils/buildProblems';
+import { buildFailureFromError, isReactionsProblem, isViewsProblem } from '../utils/buildProblems';
+import { fetchStoredViewCount } from '../utils/neoJoinView';
 import { useVsumValidation } from '../hooks/useVsumValidation';
 import { useVsumPublish } from '../hooks/useVsumPublish';
 import { CanvasProjectAccessControls } from '../components/canvas/CanvasProjectAccessControls';
@@ -414,6 +415,10 @@ export const CanvasPage: React.FC = () => {
   // Failed build or export with structured problems, shown in the problems dialog.
   const [buildFailure, setBuildFailure] = useState<{ failure: BuildFailure; title: string } | null>(null);
 
+  // Problems of the last failed build, kept after the dialog closes so the view-type bubbles
+  // stay marked until the next build check.
+  const [canvasBuildProblems, setCanvasBuildProblems] = useState<BuildProblem[]>([]);
+
   /** Shows the problems of a failed build or export, or the plain error popup without problems. */
   const showBuildFailure = useCallback((failure: BuildFailure, title: string) => {
     if (failure.problems.length === 0) {
@@ -422,6 +427,7 @@ export const CanvasPage: React.FC = () => {
     }
     dismissPopup();
     setBuildFailure({ failure, title });
+    setCanvasBuildProblems(failure.problems);
   }, [dismissPopup, showPopup]);
 
   const showBuildError = useCallback((error: unknown, fallback: string, title: string) => {
@@ -523,6 +529,18 @@ export const CanvasPage: React.FC = () => {
     activeProjectId,
     effectiveVsumRole,
   );
+
+  // Problems that mark view-type bubbles: those of the background validation and of the last
+  // build check, without duplicates.
+  const markedProblems = React.useMemo(() => {
+    const seen = new Set<string>();
+    return [...validationProblems, ...canvasBuildProblems].filter(p => {
+      const key = `${p.source}|${p.fileId ?? p.file ?? ''}|${p.line ?? ''}|${p.column ?? ''}|${p.message}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [validationProblems, canvasBuildProblems]);
 
   const { latestVersion, publishing, publish } = useVsumPublish({
     projectId: activeProjectId,
@@ -1421,10 +1439,12 @@ export const CanvasPage: React.FC = () => {
   const handleCheckBuild = useCallback(async () => {
     if (isViewOnly || !activeProjectId) return;
     setCheckingBuild(true);
+    setCanvasBuildProblems([]);
     showPopup('Checking whether this VSUM can be built…', 'info');
     try {
       const res = await apiService.buildVsum(activeProjectId);
-      showPopup(describeBuildSuccess(res?.data?.constraintRuleSets), 'success');
+      const viewTypeCount = await fetchStoredViewCount(activeProjectId);
+      showPopup(describeBuildSuccess(res?.data?.constraintRuleSets, viewTypeCount), 'success');
     } catch (e: unknown) {
       const detail = extractApiErrorMessage(e, 'Build check failed.');
       const missingReactionFile = detail.toLowerCase().includes('reaction file')
@@ -1514,6 +1534,9 @@ export const CanvasPage: React.FC = () => {
     if (isReactionsProblem(problem)) {
       const position = problem.line ? { lineNumber: problem.line, column: problem.column } : undefined;
       opened = canvas?.openReactionFileAt?.(problem.fileId, position);
+    } else if (isViewsProblem(problem)) {
+      const position = problem.line ? { lineNumber: problem.line, column: problem.column } : undefined;
+      opened = canvas?.openViewTypeFileAt?.(problem.fileId, position);
     } else {
       opened = canvas?.openMetaModelFile?.(problem.fileId);
     }
@@ -1693,6 +1716,7 @@ export const CanvasPage: React.FC = () => {
         constraintFilterNodeId={constraintFilterNodeId}
         onConstraintNodeFilter={setConstraintFilterNodeId}
         onSaveChanges={handleSaveChanges}
+        buildProblems={markedProblems}
         projectTabsBelowModeToggle={
           openTabs.length > 0 ? (
             <CanvasProjectTabs

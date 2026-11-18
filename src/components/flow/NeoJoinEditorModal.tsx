@@ -17,7 +17,7 @@ interface NeoJoinEditorModalProps {
   readonly readOnly?: boolean;
 }
 
-/** Monaco + NeoJoin language server for a view type's `.nj` query. */
+/** Monaco + the NeoJoin language server for one view type's `.nj` definition. */
 export const NeoJoinEditorModal: React.FC<NeoJoinEditorModalProps> = ({
   state,
   onClose,
