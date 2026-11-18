@@ -147,9 +147,14 @@ export function isMetamodelProblem(problem: BuildProblem): boolean {
   return problem.source === 'METAMODEL' || hasExtension(problem.file, ['.ecore', '.genmodel']);
 }
 
+export function isViewsProblem(problem: BuildProblem): boolean {
+  return problem.source === 'VIEWS' || hasExtension(problem.file, ['.nj']);
+}
+
 /** Whether the UI can take the user to the file of the problem. */
 export function isNavigableBuildProblem(problem: BuildProblem): boolean {
-  return problem.fileId != null && (isReactionsProblem(problem) || isMetamodelProblem(problem));
+  return problem.fileId != null
+    && (isReactionsProblem(problem) || isMetamodelProblem(problem) || isViewsProblem(problem));
 }
 
 export interface BuildProblemEntry {

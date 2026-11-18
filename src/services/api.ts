@@ -473,7 +473,7 @@ class ApiService {
     }
   }
 
-  async uploadFile(file: File, type: 'ECORE' | 'GEN_MODEL' | 'REACTION'): Promise<{ data: string; message: string }> {
+  async uploadFile(file: File, type: 'ECORE' | 'GEN_MODEL' | 'REACTION' | 'NEO_JOIN'): Promise<{ data: string; message: string }> {
     const token = await AuthService.ensureValidToken();
 
     if (!token) {
@@ -942,7 +942,7 @@ class ApiService {
   private async updateUploadedFile(
     fileId: number | string,
     file: File,
-    endpointSuffix: 'update-reaction' | 'update-ecore',
+    endpointSuffix: 'update-reaction' | 'update-ecore' | 'update-neojoin',
     logLabel: string,
   ): Promise<{ data: string; message: string }> {
     const token = await AuthService.ensureValidToken();
@@ -1009,6 +1009,13 @@ class ApiService {
     file: File,
   ): Promise<{ data: string; message: string }> {
     return this.updateUploadedFile(fileId, file, 'update-reaction', 'Update reaction file');
+  }
+
+  async updateNeoJoinFile(
+    fileId: number | string,
+    file: File,
+  ): Promise<{ data: string; message: string }> {
+    return this.updateUploadedFile(fileId, file, 'update-neojoin', 'Update NeoJoin file');
   }
 
   async updateEcoreFile(
@@ -1281,4 +1288,16 @@ export interface MetaModelRelationRequest {
 export interface VsumSyncChangesPutRequest {
   metaModelIds: number[];
   metaModelRelationRequests: MetaModelRelationRequest[] | null; // you said null for now
+  /** The views of the VSUM; omitted keeps the stored views, an empty list deletes them all. */
+  viewRequests?: ViewRequest[];
+}
+
+/** One view of the VSUM in a sync request; its definition is a stored NeoJoin file. */
+export interface ViewRequest {
+  id?: number;
+  name: string;
+  description?: string;
+  /** Source ids of the metamodels the view uses. */
+  metaModelIds: number[];
+  fileStorageId: number;
 }

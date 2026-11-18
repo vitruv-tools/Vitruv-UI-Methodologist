@@ -40,12 +40,27 @@ export interface BuildFailureDescription {
  *
  * @param constraintRuleSets the names of the rule sets built into the VSUM, or undefined/null if
  *     the backend did not report them, e.g. because they changed during the build
+ * @param viewTypeCount the number of view types (NeoJoin views) built into the VSUM, or
+ *     undefined if it is not known
  */
-export function describeBuildSuccess(constraintRuleSets: string[] | null | undefined): string {
+export function describeBuildSuccess(
+  constraintRuleSets: string[] | null | undefined,
+  viewTypeCount?: number,
+): string {
+  return `${describeRuleSets(constraintRuleSets)}${describeViewTypes(viewTypeCount)}`;
+}
+
+function describeRuleSets(constraintRuleSets: string[] | null | undefined): string {
   if (!constraintRuleSets) return BUILD_SUCCESS;
   if (constraintRuleSets.length === 0) return `${BUILD_SUCCESS} It has no constraint rule sets.`;
   const label = constraintRuleSets.length === 1 ? 'constraint rule set' : 'constraint rule sets';
   return `${BUILD_SUCCESS} It includes ${constraintRuleSets.length} ${label}: ${constraintRuleSets.join(', ')}.`;
+}
+
+function describeViewTypes(viewTypeCount: number | undefined): string {
+  if (viewTypeCount === undefined) return '';
+  if (viewTypeCount === 0) return ' It has no view types.';
+  return ` It includes ${viewTypeCount} ${viewTypeCount === 1 ? 'view type' : 'view types'}.`;
 }
 
 /**

@@ -44,6 +44,15 @@ export interface VsumMetaModelRelation {
 export interface VsumDetails extends Vsum {
   metaModels: VsumMetaModelRef[];
   metaModelsRelation?: VsumMetaModelRelation[];
+  /** NeoJoin views stored for the VSUM; the build turns each one into a view type. */
+  views?: VsumViewRef[];
+}
+
+export interface VsumViewRef {
+  id: number;
+  name: string;
+  description?: string | null;
+  fileStorageId: number;
 }
 
 export interface ApiResponse<T> {

@@ -11,6 +11,8 @@ interface ViewTypeBubbleProps {
     onDrag: (id: string, e: React.PointerEvent) => void;
     onDragEnd: (id: string) => void;
     onClick: (id: string) => void;
+    /** Build problems found in the view type's definition; a red marker shows when above 0. */
+    problemCount?: number;
 }
 
 export const OUTER_R = 28;
@@ -25,7 +27,7 @@ const GAP = 3;
 
 export const ViewTypeBubble: React.FC<ViewTypeBubbleProps> = ({
     id, label, scope, cx, cy,
-    onDragStart, onDrag, onDragEnd, onClick,
+    onDragStart, onDrag, onDragEnd, onClick, problemCount = 0,
 }) => {
     const isDragging = useRef(false);
     const didDrag = useRef(false);
@@ -109,6 +111,20 @@ export const ViewTypeBubble: React.FC<ViewTypeBubbleProps> = ({
             >
                 {label}
             </text>
+
+            {problemCount > 0 && (
+                <g data-testid={`vt-problem-marker-${id}`} style={{ pointerEvents: 'none' }}>
+                    <title>{problemCount === 1 ? '1 build problem' : `${problemCount} build problems`}</title>
+                    <circle cx={cx + OUTER_R * 0.75} cy={cy - OUTER_R * 0.75} r={9} fill="#dc2626" stroke="white" strokeWidth={1.5} />
+                    <text
+                        x={cx + OUTER_R * 0.75} y={cy - OUTER_R * 0.75}
+                        textAnchor="middle" dominantBaseline="central"
+                        fontSize={10} fontWeight={700} fill="white"
+                    >
+                        {problemCount > 9 ? '9+' : problemCount}
+                    </text>
+                </g>
+            )}
         </g>
     );
 };
