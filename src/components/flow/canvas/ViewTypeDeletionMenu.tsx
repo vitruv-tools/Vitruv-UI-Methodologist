@@ -7,7 +7,23 @@ interface ViewTypeDeletionMenuProps {
     label: string;
     onDelete: () => void;
     onClose: () => void;
+    /** Opens the NeoJoin definition of the view type; the entry is hidden without it. */
+    onEdit?: () => void;
+    /** Build problems found in the definition of this view type. */
+    problemCount?: number;
 }
+
+const EDIT_BUTTON_STYLE: React.CSSProperties = {
+    background: 'none',
+    border: 'none',
+    color: '#0f172a',
+    fontSize: 13,
+    fontWeight: 500,
+    padding: '6px 8px',
+    borderRadius: 6,
+    cursor: 'pointer',
+    textAlign: 'left',
+};
 
 const BACKDROP_STYLE: React.CSSProperties = {
     position: 'fixed',
@@ -53,7 +69,7 @@ const DELETE_BUTTON_STYLE: React.CSSProperties = {
 };
 
 export const ViewTypeDeletionMenu: React.FC<ViewTypeDeletionMenuProps> = ({
-    x, y, label, onDelete, onClose,
+    x, y, label, onDelete, onClose, onEdit, problemCount = 0,
 }) => ReactDOM.createPortal(
     <>
         <button
@@ -69,6 +85,22 @@ export const ViewTypeDeletionMenu: React.FC<ViewTypeDeletionMenuProps> = ({
             <div style={LABEL_STYLE}>
                 {label}
             </div>
+            {problemCount > 0 && (
+                <div style={{ ...LABEL_STYLE, color: '#dc2626' }}>
+                    {problemCount === 1 ? '1 build problem' : `${problemCount} build problems`}
+                </div>
+            )}
+            {onEdit && (
+                <button
+                    type="button"
+                    style={EDIT_BUTTON_STYLE}
+                    onClick={() => { onEdit(); onClose(); }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+                >
+                    Edit NeoJoin definition
+                </button>
+            )}
             <button
                 type="button"
                 style={DELETE_BUTTON_STYLE}

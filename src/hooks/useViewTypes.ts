@@ -9,6 +9,10 @@ export interface ViewType {
     angle: number;
     linkedNodeIds: string[];
     editable: boolean;
+    /** Stored NeoJoin (`.nj`) file that defines this view type; absent until it was first saved. */
+    fileStorageId?: number | null;
+    /** Name of the NeoJoin file, fixed when it was first stored. */
+    fileName?: string;
 }
 
 const STORAGE_KEY = 'vitruv_view_types_v1';
@@ -41,6 +45,11 @@ function unlinkNodeUpdater(viewTypeId: string, nodeId: string) {
             ? { ...vt, linkedNodeIds: vt.linkedNodeIds.filter(n => n !== nodeId) }
             : vt
     );
+}
+
+function setViewFileUpdater(id: string, fileStorageId: number, fileName: string) {
+    return (prev: ViewType[]): ViewType[] =>
+        prev.map(vt => vt.id === id ? { ...vt, fileStorageId, fileName } : vt);
 }
 
 export function readStoredViewTypes(vsumId: string): ViewType[] {
@@ -101,5 +110,11 @@ export function useViewTypes(vsumId: string | undefined) {
         []
     );
 
-    return { viewTypes, addViewType, deleteViewType, updateAngle, unlinkNode };
+    const setViewFile = useCallback(
+        (id: string, fileStorageId: number, fileName: string) =>
+            setViewTypes(setViewFileUpdater(id, fileStorageId, fileName)),
+        []
+    );
+
+    return { viewTypes, addViewType, deleteViewType, updateAngle, unlinkNode, setViewFile };
 }

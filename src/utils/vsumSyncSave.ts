@@ -1,4 +1,4 @@
-import { apiService, MetaModelRelationRequest } from '../services/api';
+import { apiService, MetaModelRelationRequest, ViewRequest } from '../services/api';
 import { extractRawApiErrorMessage } from './apiErrorMessage';
 import { normalizeReactionFileId } from './workspaceSnapshotUtils';
 
@@ -49,6 +49,8 @@ export function hasLinkedReactionFiles(relations: MetaModelRelationRequest[]): b
 export interface VsumSyncSavePayload {
   metaModelIds: number[];
   metaModelRelationRequests: MetaModelRelationRequest[] | null;
+  /** Views to store; omitted keeps the views the backend has. */
+  viewRequests?: ViewRequest[];
 }
 
 export interface VsumSyncSaveResult {
@@ -70,6 +72,7 @@ export async function syncVsumWorkspaceChanges(
       await apiService.syncVsumChanges(vsumId, {
         metaModelIds: payload.metaModelIds,
         metaModelRelationRequests: rels.length > 0 ? rels : null,
+        ...(payload.viewRequests ? { viewRequests: payload.viewRequests } : {}),
       });
     const message =
       response?.data?.message ||

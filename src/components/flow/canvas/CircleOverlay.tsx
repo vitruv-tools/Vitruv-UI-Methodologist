@@ -28,6 +28,10 @@ interface CircleOverlayProps {
     onDeleteViewType: (id: string) => void;
     onUpdateViewTypeAngle: (id: string, angle: number) => void;
     onUnlinkNode: (viewTypeId: string, nodeId: string) => void;
+    /** Opens the NeoJoin editor of a view type. */
+    onEditViewType?: (id: string) => void;
+    /** Build problems per view type id, shown as markers on the bubbles. */
+    viewProblemCounts?: Record<string, number>;
 }
 
 const HANDLE_ANGLE = Math.PI / 4;
@@ -112,6 +116,8 @@ export const CircleOverlay: React.FC<CircleOverlayProps> = ({
     onDeleteViewType,
     onUnlinkNode,
     onUpdateViewTypeAngle,
+    onEditViewType,
+    viewProblemCounts,
 }) => {
     const [previewR, setPreviewR] = useState<number | null>(null);
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
@@ -335,6 +341,7 @@ export const CircleOverlay: React.FC<CircleOverlayProps> = ({
                             onDragStart={() => { }}
                             onDrag={handleBubbleDrag}
                             onDragEnd={() => { }}
+                            problemCount={viewProblemCounts?.[vt.id] ?? 0}
                             onClick={(id) => handleBubbleClick(id, pos.x, pos.y, vt.label)}
                         />
                     );
@@ -379,6 +386,8 @@ export const CircleOverlay: React.FC<CircleOverlayProps> = ({
                     x={deletionMenu.x}
                     y={deletionMenu.y}
                     label={deletionMenu.label}
+                    problemCount={viewProblemCounts?.[deletionMenu.id] ?? 0}
+                    onEdit={onEditViewType ? () => onEditViewType(deletionMenu.id) : undefined}
                     onDelete={() => onDeleteViewType(deletionMenu.id)}
                     onClose={() => setDeletionMenu(null)}
                 />
