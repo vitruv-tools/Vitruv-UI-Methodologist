@@ -49,7 +49,7 @@ export function hasLinkedReactionFiles(relations: MetaModelRelationRequest[]): b
 export interface VsumSyncSavePayload {
   metaModelIds: number[];
   metaModelRelationRequests: MetaModelRelationRequest[] | null;
-  /** Views to store; omitted keeps the views the backend has. */
+  /** Present only after views have loaded. An empty list deletes every view. */
   viewRequests?: ViewRequest[];
 }
 
@@ -72,7 +72,7 @@ export async function syncVsumWorkspaceChanges(
       await apiService.syncVsumChanges(vsumId, {
         metaModelIds: payload.metaModelIds,
         metaModelRelationRequests: rels.length > 0 ? rels : null,
-        ...(payload.viewRequests ? { viewRequests: payload.viewRequests } : {}),
+        ...(payload.viewRequests !== undefined ? { viewRequests: payload.viewRequests } : {}),
       });
     const message =
       response?.data?.message ||

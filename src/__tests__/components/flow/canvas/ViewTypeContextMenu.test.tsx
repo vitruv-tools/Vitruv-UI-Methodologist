@@ -172,8 +172,8 @@ describe('ViewTypeContextMenu', () => {
 
     it('defaults to single scope', () => {
         renderMenu();
-        const singleBtn = screen.getByText('● Single');
-        expect(singleBtn).toHaveStyle({ fontWeight: 600 });
+        expect(screen.getByText('● Single')).toHaveClass('view-type-menu__scope--active');
+        expect(screen.getByText('◎ Multi')).not.toHaveClass('view-type-menu__scope--active');
     });
 
     it('switches to multi scope when Multi is clicked', () => {
@@ -265,6 +265,24 @@ describe('ViewTypeContextMenu', () => {
         expect(onClose).toHaveBeenCalled();
     });
 
+    it('closes when the X button is clicked', () => {
+        const onClose = vi.fn();
+        const onAdd = vi.fn();
+        renderMenu({ onClose, onAdd });
+        fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+        expect(onClose).toHaveBeenCalledTimes(1);
+        expect(onAdd).not.toHaveBeenCalled();
+    });
+
+    it('keeps the Add button inside the window when the menu opens near the bottom', () => {
+        renderMenu({ x: 20, y: window.innerHeight + 400 });
+        const menu = document.body.querySelector('dialog') as HTMLElement;
+        const top = Number.parseFloat(menu.style.top);
+        expect(top).toBeGreaterThanOrEqual(0);
+        expect(top).toBeLessThan(window.innerHeight);
+        expect(screen.getByRole('button', { name: /^Add$/ })).toBeVisible();
+    });
+
     it('does not close when clicking inside the menu panel', () => {
         const onClose = vi.fn();
         renderMenu({ onClose });
@@ -286,5 +304,13 @@ describe('ViewTypeContextMenu', () => {
         expect(checkbox).toBeChecked();
         fireEvent.click(checkbox);
         expect(checkbox).not.toBeChecked();
+    });
+
+    it('uses the shared theme classes for the card, field, and actions', () => {
+        renderMenu();
+        expect(document.body.querySelector('dialog')).toHaveClass('view-type-menu');
+        expect(screen.getByPlaceholderText(/Label/i)).toHaveClass('view-type-menu__input');
+        expect(screen.getByRole('button', { name: /^Add$/ })).toHaveClass('view-type-menu__add');
+        expect(screen.getByText('● Single')).toHaveClass('view-type-menu__scope', 'view-type-menu__scope--single');
     });
 });

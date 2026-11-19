@@ -26,6 +26,7 @@ interface CircleOverlayProps {
     ecoreNodes: Node[];
     onAddViewType: (label: string, scope: ViewTypeScope, linkedNodeIds: string[], angle: number, editable: boolean) => void;
     onDeleteViewType: (id: string) => void;
+    onEditViewQuery?: (id: string) => void;
     onUpdateViewTypeAngle: (id: string, angle: number) => void;
     onUnlinkNode: (viewTypeId: string, nodeId: string) => void;
     /** Opens the NeoJoin editor of a view type. */
@@ -114,6 +115,7 @@ export const CircleOverlay: React.FC<CircleOverlayProps> = ({
     ecoreNodes,
     onAddViewType,
     onDeleteViewType,
+    onEditViewQuery,
     onUnlinkNode,
     onUpdateViewTypeAngle,
     onEditViewType,
@@ -389,6 +391,9 @@ export const CircleOverlay: React.FC<CircleOverlayProps> = ({
                     problemCount={viewProblemCounts?.[deletionMenu.id] ?? 0}
                     onEdit={onEditViewType ? () => onEditViewType(deletionMenu.id) : undefined}
                     onDelete={() => onDeleteViewType(deletionMenu.id)}
+                    onEditQuery={onEditViewQuery
+                        ? () => onEditViewQuery(deletionMenu.id)
+                        : undefined}
                     onClose={() => setDeletionMenu(null)}
                 />
             )}

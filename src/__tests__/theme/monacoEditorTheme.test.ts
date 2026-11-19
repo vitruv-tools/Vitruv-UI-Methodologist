@@ -51,7 +51,9 @@ describe('monaco editor themes', () => {
 
   it('keeps OCL and Reactions token colors readable on both backgrounds', () => {
     const lightReactions = foregrounds(
-      vitruvEditorLightTheme.rules.filter((rule) => rule.token.endsWith('.reactions')),
+      vitruvEditorLightTheme.rules.filter((rule) =>
+        rule.token.endsWith('.reactions') || rule.token.endsWith('.neojoin'),
+      ),
       'ffffff',
     );
     const darkRules = foregrounds(vitruvEditorDarkTheme.rules, '0f172a');
@@ -61,10 +63,10 @@ describe('monaco editor themes', () => {
     }
 
     expect(vitruvEditorLightTheme.rules.map((rule) => rule.token)).toEqual(
-      expect.arrayContaining(['keyword.package', 'keyword.reactions', 'delimiter']),
+      expect.arrayContaining(['keyword.package', 'keyword.reactions', 'keyword.neojoin', 'delimiter']),
     );
     expect(vitruvEditorDarkTheme.rules.map((rule) => rule.token)).toEqual(
-      expect.arrayContaining(['keyword.package', 'keyword.reactions', 'delimiter.reactions']),
+      expect.arrayContaining(['keyword.package', 'keyword.reactions', 'keyword.neojoin', 'delimiter.reactions']),
     );
   });
 

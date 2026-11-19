@@ -1285,19 +1285,20 @@ export interface MetaModelRelationRequest {
   fineGranularMetaModelRelationSet?: import('../types/FineGranularMetaModelRelation').EditableFineGranularMetaModelRelation[];
 }
 
+export interface ViewRequest {
+  /** Existing view. Omitted when the view is created by this request. */
+  id?: number | null;
+  /** Unique within the VSUM. Omitted to keep the current name. */
+  name?: string | null;
+  description?: string | null;
+  /** Source ids of the metamodels this view uses. */
+  metaModelIds: number[];
+  fileStorageId: number;
+}
+
 export interface VsumSyncChangesPutRequest {
   metaModelIds: number[];
   metaModelRelationRequests: MetaModelRelationRequest[] | null; // you said null for now
-  /** The views of the VSUM; omitted keeps the stored views, an empty list deletes them all. */
+  /** Full view list. An empty list deletes every view; omitting the field leaves views unchanged. */
   viewRequests?: ViewRequest[];
-}
-
-/** One view of the VSUM in a sync request; its definition is a stored NeoJoin file. */
-export interface ViewRequest {
-  id?: number;
-  name: string;
-  description?: string;
-  /** Source ids of the metamodels the view uses. */
-  metaModelIds: number[];
-  fileStorageId: number;
 }

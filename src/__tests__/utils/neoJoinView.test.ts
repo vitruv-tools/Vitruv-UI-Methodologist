@@ -40,13 +40,13 @@ describe('neoJoinView', () => {
   });
 
   it('sends only view types with a file and linked metamodels', () => {
-    const stored = vt({ fileStorageId: 5, fileName: 'Shop_view.nj' });
-    const requests = buildViewRequests([stored, vt({ id: 'vt-2' }), vt({ id: 'vt-3', fileStorageId: 6, linkedNodeIds: [] })], nodes);
+    const stored = vt({ fileId: 5, fileName: 'Shop_view.nj' });
+    const requests = buildViewRequests([stored, vt({ id: 'vt-2' }), vt({ id: 'vt-3', fileId: 6, linkedNodeIds: [] })], nodes);
     expect(requests).toEqual([{ name: 'Shop_view', metaModelIds: [7], fileStorageId: 5 }]);
   });
 
   it('counts view problems per view type by file id, then by file name', () => {
-    const viewTypes = [vt({ fileStorageId: 5, fileName: 'a.nj' }), vt({ id: 'vt-2', fileName: 'b.nj' })];
+    const viewTypes = [vt({ fileId: 5, fileName: 'a.nj' }), vt({ id: 'vt-2', fileName: 'b.nj' })];
     const counts = countViewProblems([
       { source: 'VIEWS', fileId: 5, message: 'x' },
       { source: 'VIEWS', file: 'b.nj', message: 'y' },

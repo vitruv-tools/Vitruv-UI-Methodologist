@@ -573,7 +573,7 @@ describe('CanvasPage build problems', () => {
   });
 
   it('opens the metamodel of a metamodel problem and keeps the dialog if it is not on the canvas', async () => {
-    mockOpenMetaModelFile.mockReturnValue(false);
+    mockOpenMetaModelFile.mockImplementation(() => false);
     (apiService.downloadVsumProject as Mock).mockRejectedValueOnce(Object.assign(new Error('Bad metamodel'), {
       response: {
         data: {
@@ -593,7 +593,7 @@ describe('CanvasPage build problems', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: /Open file/ }));
 
     expect(mockOpenMetaModelFile).toHaveBeenCalledWith(11);
-    expect(within(dialog).getByRole('status')).toHaveTextContent('families.ecore is not on the canvas');
+    expect(await within(dialog).findByRole('status')).toHaveTextContent('families.ecore is not on the canvas');
   });
 
   it('keeps the error popup for failures without problems', async () => {

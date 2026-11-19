@@ -1,29 +1,20 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
+import { useAnchoredMenuPosition } from './viewTypeMenuPosition';
+import './viewTypeMenu.css';
 
 interface ViewTypeDeletionMenuProps {
     x: number;
     y: number;
     label: string;
     onDelete: () => void;
+    onEditQuery?: () => void;
     onClose: () => void;
-    /** Opens the NeoJoin definition of the view type; the entry is hidden without it. */
+    /** Opens the NeoJoin definition of the view type; used when Edit query is not passed. */
     onEdit?: () => void;
     /** Build problems found in the definition of this view type. */
     problemCount?: number;
 }
-
-const EDIT_BUTTON_STYLE: React.CSSProperties = {
-    background: 'none',
-    border: 'none',
-    color: '#0f172a',
-    fontSize: 13,
-    fontWeight: 500,
-    padding: '6px 8px',
-    borderRadius: 6,
-    cursor: 'pointer',
-    textAlign: 'left',
-};
 
 const BACKDROP_STYLE: React.CSSProperties = {
     position: 'fixed',
@@ -35,42 +26,12 @@ const BACKDROP_STYLE: React.CSSProperties = {
     padding: 0,
 };
 
-const MENU_STYLE: React.CSSProperties = {
-    position: 'fixed',
-    margin: 0,
-    zIndex: 1000,
-    background: 'white',
-    border: '1px solid #e5e7eb',
-    borderRadius: 10,
-    boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-    padding: '8px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 4,
-    minWidth: 140,
-};
-
-const LABEL_STYLE: React.CSSProperties = {
-    fontSize: 12,
-    color: '#6b7280',
-    padding: '4px 8px',
-};
-
-const DELETE_BUTTON_STYLE: React.CSSProperties = {
-    background: 'none',
-    border: 'none',
-    color: '#dc2626',
-    fontSize: 13,
-    fontWeight: 500,
-    padding: '6px 8px',
-    borderRadius: 6,
-    cursor: 'pointer',
-    textAlign: 'left',
-};
-
 export const ViewTypeDeletionMenu: React.FC<ViewTypeDeletionMenuProps> = ({
-    x, y, label, onDelete, onClose, onEdit, problemCount = 0,
-}) => ReactDOM.createPortal(
+    x, y, label, onDelete, onEditQuery, onClose, onEdit, problemCount = 0,
+}) => {
+    const { ref: menuRef, style: menuStyle } = useAnchoredMenuPosition<HTMLDialogElement>(x, y);
+    const edit = onEditQuery ?? onEdit;
+    return ReactDOM.createPortal(
     <>
         <button
             type="button"
@@ -80,37 +41,46 @@ export const ViewTypeDeletionMenu: React.FC<ViewTypeDeletionMenuProps> = ({
         />
         <dialog
             open
-            style={{ ...MENU_STYLE, left: x, top: y }}
+            ref={menuRef}
+            className="view-type-menu view-type-menu--compact"
+            style={menuStyle}
         >
-            <div style={LABEL_STYLE}>
-                {label}
+            <div className="view-type-menu__header">
+                <div className="view-type-menu__label">
+                    {label}
+                </div>
+                <button
+                    type="button"
+                    className="view-type-menu__close"
+                    aria-label="Close"
+                    onClick={onClose}
+                >
+                    ×
+                </button>
             </div>
             {problemCount > 0 && (
-                <div style={{ ...LABEL_STYLE, color: '#dc2626' }}>
+                <div className="view-type-menu__problems">
                     {problemCount === 1 ? '1 build problem' : `${problemCount} build problems`}
                 </div>
             )}
-            {onEdit && (
+            {edit && (
                 <button
                     type="button"
-                    style={EDIT_BUTTON_STYLE}
-                    onClick={() => { onEdit(); onClose(); }}
-                    onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+                    className="view-type-menu__action"
+                    onClick={() => { edit(); onClose(); }}
                 >
-                    Edit NeoJoin definition
+                    Edit query
                 </button>
             )}
             <button
                 type="button"
-                style={DELETE_BUTTON_STYLE}
+                className="view-type-menu__action view-type-menu__action--danger"
                 onClick={() => { onDelete(); onClose(); }}
-                onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
             >
                 Delete view type
             </button>
         </dialog>
     </>,
     document.body
-);
+    );
+};

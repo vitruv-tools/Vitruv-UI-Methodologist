@@ -30,7 +30,7 @@ import { BuildProblemsDialog } from '../components/canvas/BuildProblemsDialog';
 import { ValidationProblemsDialog } from '../components/canvas/ValidationProblemsDialog';
 import type { BuildFailure, BuildProblem } from '../types/vsumBuild';
 import { buildFailureFromError, isReactionsProblem, isViewsProblem } from '../utils/buildProblems';
-import { buildViewRequests, fetchStoredViewCount } from '../utils/neoJoinView';
+import { fetchStoredViewCount } from '../utils/neoJoinView';
 import { useVsumValidation } from '../hooks/useVsumValidation';
 import { useVsumPublish } from '../hooks/useVsumPublish';
 import { CanvasProjectAccessControls } from '../components/canvas/CanvasProjectAccessControls';
@@ -1027,6 +1027,7 @@ export const CanvasPage: React.FC = () => {
       const savedSnapshot: WorkspaceSnapshot = {
         metaModelIds: payload.metaModelIds,
         metaModelRelationRequests: savedRelations,
+        ...(payload.viewRequests !== undefined ? { viewRequests: payload.viewRequests } : {}),
       };
       setBaselineForInstance(instanceId, savedSnapshot);
       const session = sessionsRef.current.get(instanceId);
@@ -1556,19 +1557,11 @@ export const CanvasPage: React.FC = () => {
       const snapshot: WorkspaceSnapshot =
         flowCanvasRef.current?.getWorkspaceSnapshot?.() ?? emptyWorkspaceSnapshot();
       const payload = prepareSnapshotForSyncSave(snapshot);
-      // Views are stored from the view types that have a NeoJoin file. With none, the stored views
-      // stay: an empty list would also delete them for someone whose view types live in another browser.
-      const viewRequests = buildViewRequests(
-        flowCanvasRef.current?.getViewTypes?.() ?? [],
-        flowCanvasRef.current?.getNodes?.() ?? [],
-      );
-      const { message, savedRelations } = await syncVsumWorkspaceChanges(activeProjectId, {
-        ...payload,
-        ...(viewRequests.length > 0 ? { viewRequests } : {}),
-      });
+      const { message, savedRelations } = await syncVsumWorkspaceChanges(activeProjectId, payload);
       let savedSnapshot: WorkspaceSnapshot = {
         metaModelIds: payload.metaModelIds,
         metaModelRelationRequests: savedRelations,
+        ...(payload.viewRequests !== undefined ? { viewRequests: payload.viewRequests } : {}),
       };
       if (hasVsumDetailsStore(activeProjectId)) {
         try {
@@ -1588,6 +1581,7 @@ export const CanvasPage: React.FC = () => {
             savedSnapshot = {
               metaModelIds: prepared.metaModelIds,
               metaModelRelationRequests: prepared.metaModelRelationRequests ?? [],
+              ...(prepared.viewRequests !== undefined ? { viewRequests: prepared.viewRequests } : {}),
             };
           }
         } catch {

@@ -1,48 +1,12 @@
 import React from 'react';
-import type { languages } from 'monaco-editor';
-import { CodeEditorModal, type EditorPosition } from './CodeEditorModal';
+import { CodeEditorModal } from './CodeEditorModal';
+import { CodeEditorState } from './flowCanvasTypes';
+import { neoJoinLanguageConfig, neoJoinMonarch } from './NeoJoinMonarchGrammar';
 
-export const neoJoinMonarch: languages.IMonarchLanguage & { keywords: string[] } = {
-  defaultToken: '',
-  tokenPostfix: '.nj',
-  keywords: [
-    'export', 'to', 'import', 'from', 'create', 'join', 'where', 'on', 'as', 'group', 'by',
-    'merge', 'with', 'for', 'if', 'else', 'in', 'true', 'false', 'null', 'class', 'abstract',
-    'extends', 'containment', 'opposite', 'ordered', 'unique', 'many', 'optional',
-  ],
-  tokenizer: {
-    root: [
-      [/[a-zA-Z_]\w*/, { cases: { '@keywords': 'keyword', '@default': 'identifier' } }],
-      [/\/\/.*/, 'comment'],
-      [/\/\*/, 'comment', '@comment'],
-      [/"[^"\\]*(?:\\.[^"\\]*)*"/, 'string'],
-      [/\d+/, 'number'],
-    ],
-    comment: [
-      [/[^/*]+/, 'comment'],
-      [/\*\//, 'comment', '@pop'],
-      [/[/*]/, 'comment'],
-    ],
-  },
-};
-
-export const neoJoinLanguageConfig: languages.LanguageConfiguration = {
-  comments: { lineComment: '//', blockComment: ['/*', '*/'] },
-  brackets: [['{', '}'], ['(', ')'], ['[', ']']],
-  autoClosingPairs: [
-    { open: '{', close: '}' },
-    { open: '(', close: ')' },
-    { open: '[', close: ']' },
-    { open: '"', close: '"' },
-  ],
-};
-
-export interface NeoJoinEditorState {
-  /** Id of the view type being edited. */
-  viewTypeId: string;
-  title: string;
-  initialCode: string;
-  initialPosition?: EditorPosition;
+export interface NeoJoinEditorState extends CodeEditorState {
+  readonly viewTypeId: string;
+  readonly label: string;
+  readonly fileId?: number | null;
 }
 
 interface NeoJoinEditorModalProps {
@@ -53,7 +17,7 @@ interface NeoJoinEditorModalProps {
   readonly readOnly?: boolean;
 }
 
-/** Monaco + the NeoJoin language server for the `.nj` definition of one view type. */
+/** Monaco + the NeoJoin language server for one view type's `.nj` definition. */
 export const NeoJoinEditorModal: React.FC<NeoJoinEditorModalProps> = ({
   state,
   onClose,
@@ -62,9 +26,10 @@ export const NeoJoinEditorModal: React.FC<NeoJoinEditorModalProps> = ({
   readOnly,
 }) => {
   if (!state) return null;
+
   return (
     <CodeEditorModal
-      isOpen
+      isOpen={state.isOpen}
       onClose={onClose}
       onSave={onSave}
       initialCode={state.initialCode}
@@ -75,7 +40,7 @@ export const NeoJoinEditorModal: React.FC<NeoJoinEditorModalProps> = ({
       fileExtension=".nj"
       monarchGrammar={neoJoinMonarch}
       languageConfig={neoJoinLanguageConfig}
-      title={state.title}
+      title={`NeoJoin: ${state.label}`}
       readOnly={readOnly}
       initialPosition={state.initialPosition}
     />

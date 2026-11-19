@@ -118,6 +118,7 @@ vi.mock('../../../components/flow/CodeEditorModal', () => ({
 vi.mock('../../../services/api', () => ({
   apiService: {
     getFile: vi.fn(),
+    getVsumDetails: vi.fn().mockResolvedValue({ data: { views: [] }, message: 'ok' }),
     uploadFile: vi.fn().mockResolvedValue({ data: { id: 42 } }),
     updateReactionFile: vi.fn().mockResolvedValue(undefined),
   },
@@ -127,6 +128,7 @@ describe('FlowCanvas', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    (apiService.getVsumDetails as Mock).mockResolvedValue({ data: { views: [] }, message: 'ok' });
   });
 
   it('renders ReactFlow and background', () => {
@@ -299,10 +301,10 @@ describe('FlowCanvas', () => {
     expect(screen.getByTestId('react-flow')).toBeInTheDocument();
   });
 
-  it('renders with userId and vsumId props', () => {
+  it('renders with userId and vsumId props', async () => {
     const ref = createRef<any>();
     render(<FlowCanvas ref={ref} userId="user-1" vsumId="vsum-1" />);
-    expect(screen.getByTestId('react-flow')).toBeInTheDocument();
+    expect(await screen.findByTestId('react-flow')).toBeInTheDocument();
   });
 
   it('CodeEditorModal is not shown by default', () => {

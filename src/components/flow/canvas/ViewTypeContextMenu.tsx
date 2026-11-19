@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
 import { ViewTypeScope } from '../../../hooks/useViewTypes';
 import { Node } from 'reactflow';
+import { useAnchoredMenuPosition } from './viewTypeMenuPosition';
+import './viewTypeMenu.css';
 
 interface ViewTypeContextMenuProps {
     x: number;
@@ -21,89 +23,6 @@ const BACKDROP_STYLE: React.CSSProperties = {
     padding: 0,
 };
 
-const MENU_STYLE: React.CSSProperties = {
-    position: 'fixed',
-    margin: 0,
-    zIndex: 1000,
-    background: 'white',
-    border: '1px solid #e5e7eb',
-    borderRadius: 10,
-    boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-    padding: '12px 16px',
-    minWidth: 240,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 10,
-};
-
-const INPUT_STYLE: React.CSSProperties = {
-    border: '1px solid #d1d5db',
-    borderRadius: 6,
-    padding: '6px 10px',
-    fontSize: 13,
-    outline: 'none',
-};
-
-const NODE_LIST_STYLE: React.CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 4,
-    maxHeight: 160,
-    overflowY: 'auto',
-};
-
-function getScopeButtonStyle(scope: ViewTypeScope, current: ViewTypeScope): React.CSSProperties {
-    const isActive = scope === current;
-    let background = 'white';
-    let color = '#374151';
-    if (isActive) {
-        background = scope === 'single' ? '#fef9c3' : '#fee2e2';
-        color = scope === 'single' ? '#92400e' : '#991b1b';
-    }
-    return {
-        flex: 1,
-        padding: '5px 0',
-        borderRadius: 6,
-        border: isActive ? '2px solid #374151' : '1px solid #d1d5db',
-        background,
-        fontSize: 12,
-        cursor: 'pointer',
-        fontWeight: isActive ? 600 : 400,
-        color,
-    };
-}
-
-function getNodeItemStyle(isSelected: boolean): React.CSSProperties {
-    return {
-        padding: '6px 10px',
-        borderRadius: 6,
-        border: isSelected ? '2px solid #374151' : '1px solid #e5e7eb',
-        background: isSelected ? '#f3f4f6' : 'white',
-        cursor: 'pointer',
-        fontSize: 12,
-        fontWeight: isSelected ? 600 : 400,
-        color: '#374151',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        width: '100%',
-        textAlign: 'left',
-    };
-}
-
-function getAddButtonStyle(disabled: boolean): React.CSSProperties {
-    return {
-        background: disabled ? '#d1d5db' : '#374151',
-        color: 'white',
-        border: 'none',
-        borderRadius: 6,
-        padding: '7px 0',
-        fontSize: 13,
-        fontWeight: 600,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-    };
-}
-
 export const ViewTypeContextMenu: React.FC<ViewTypeContextMenuProps> = ({
     x, y, ecoreNodes, onAdd, onClose,
 }) => {
@@ -111,6 +30,7 @@ export const ViewTypeContextMenu: React.FC<ViewTypeContextMenuProps> = ({
     const [scope, setScope] = useState<ViewTypeScope>('single');
     const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
     const [editable, setEditable] = useState(false);
+    const { ref: menuRef, style: menuStyle } = useAnchoredMenuPosition<HTMLDialogElement>(x, y, ecoreNodes.length);
 
     const toggleNode = (nodeId: string) => {
         if (scope === 'single') {
@@ -145,61 +65,66 @@ export const ViewTypeContextMenu: React.FC<ViewTypeContextMenuProps> = ({
             />
             <dialog
                 open
-                style={{ ...MENU_STYLE, left: x, top: y }}
+                ref={menuRef}
+                className="view-type-menu"
+                style={menuStyle}
             >
-                <div style={{ fontWeight: 600, fontSize: 13, color: '#374151' }}>
-                    Add View Type
+                <div className="view-type-menu__header">
+                    <div className="view-type-menu__title">
+                        Add View Type
+                    </div>
+                    <button
+                        type="button"
+                        className="view-type-menu__close"
+                        aria-label="Close"
+                        onClick={onClose}
+                    >
+                        ×
+                    </button>
                 </div>
 
                 <input
                     autoFocus
+                    className="view-type-menu__input"
                     placeholder="Label (e.g. VT1)"
                     value={label}
                     onChange={e => setLabel(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') handleAdd(); }}
-                    style={INPUT_STYLE}
                 />
 
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div className="view-type-menu__scopes">
                     {(['single', 'multi'] as ViewTypeScope[]).map(s => (
                         <button
                             key={s}
                             type="button"
                             onClick={() => handleScopeChange(s)}
-                            style={getScopeButtonStyle(s, scope)}
+                            className={[
+                                'view-type-menu__scope',
+                                `view-type-menu__scope--${s}`,
+                                scope === s ? 'view-type-menu__scope--active' : '',
+                            ].filter(Boolean).join(' ')}
                         >
                             {s === 'single' ? '● Single' : '◎ Multi'}
                         </button>
                     ))}
                 </div>
 
-                <label
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        cursor: 'pointer',
-                        fontSize: 13,
-                        color: '#374151',
-                        userSelect: 'none',
-                    }}
-                >
+                <label className="view-type-menu__check">
                     <input
                         type="checkbox"
                         checked={editable}
                         onChange={e => setEditable(e.target.checked)}
-                        style={{ width: 14, height: 14, cursor: 'pointer', accentColor: '#374151' }}
                     />
                     {' '}Editable
                 </label>
 
-                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: -4 }}>
+                <div className="view-type-menu__hint">
                     {scope === 'single' ? 'Select metamodel:' : 'Select metamodels:'}
                 </div>
 
-                <div style={NODE_LIST_STYLE}>
+                <div className="view-type-menu__nodes">
                     {ecoreNodes.length === 0 && (
-                        <div style={{ fontSize: 12, color: '#9ca3af', padding: '4px 0' }}>
+                        <div className="view-type-menu__empty">
                             No metamodel nodes on canvas
                         </div>
                     )}
@@ -210,15 +135,11 @@ export const ViewTypeContextMenu: React.FC<ViewTypeContextMenuProps> = ({
                                 key={node.id}
                                 type="button"
                                 onClick={() => toggleNode(node.id)}
-                                style={getNodeItemStyle(isSelected)}
+                                className={isSelected
+                                    ? 'view-type-menu__node view-type-menu__node--selected'
+                                    : 'view-type-menu__node'}
                             >
-                                <span style={{
-                                    width: 8,
-                                    height: 8,
-                                    borderRadius: '50%',
-                                    background: isSelected ? '#374151' : '#d1d5db',
-                                    flexShrink: 0,
-                                }} />
+                                <span className="view-type-menu__dot" />
                                 {node.data?.displayName ?? node.data?.fileName ?? node.id}
                                 {typeof node.data?.version === 'string' && node.data.version.trim()
                                   ? ` (${node.data.version.trim()})`
@@ -232,7 +153,7 @@ export const ViewTypeContextMenu: React.FC<ViewTypeContextMenuProps> = ({
                     type="button"
                     onClick={handleAdd}
                     disabled={isDisabled}
-                    style={getAddButtonStyle(isDisabled)}
+                    className="view-type-menu__add"
                 >
                     Add
                 </button>

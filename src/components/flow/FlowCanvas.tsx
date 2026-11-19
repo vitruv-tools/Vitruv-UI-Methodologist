@@ -27,6 +27,7 @@ import { EcoreFileBox } from './EcoreFileBox';
 import { metaModelDisplayColor } from '../../utils/metaModelColors';
 import { ConnectionLine } from './ConnectionLine';
 import { ReactionEditorModal } from './ReactionEditorModal';
+import { NeoJoinEditorModal, type NeoJoinEditorState } from './NeoJoinEditorModal';
 import { findMetaModelNodeByFileId, findReactionEdgeByFileId } from './flowCanvasProblemNavigation';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { apiService } from '../../services/api';
@@ -38,20 +39,15 @@ import {
   computeInitialCircle,
   Circle,
 } from '../../hooks/useCircleContainment';
-import { useViewTypes, ViewTypeScope, type ViewType } from '../../hooks/useViewTypes';
+import { useViewTypes, ViewTypeScope, type ViewSyncBase, type ViewType } from '../../hooks/useViewTypes';
 import { pickFocusUmlFlowNodes } from '../../utils/umlClassLayout';
 import { fetchReactionCode, persistReactionCode, resolveReactionFileId } from '../../utils/reactionFile';
+import { buildNeoJoinSkeleton, persistNeoJoinCode } from '../../utils/neoJoinFile';
+import { prepareSnapshotForSyncSave } from '../../utils/workspaceSnapshotUtils';
+import { linkViewTypesToNodes, metamodelRefFromNode, toViewRequests } from '../../utils/viewTypeSync';
 
 import { CircleOverlay } from './canvas/CircleOverlay';
-import { NeoJoinEditorModal, type NeoJoinEditorState } from './NeoJoinEditorModal';
-import {
-  buildInitialNeoJoinCode,
-  countViewProblems,
-  fetchNeoJoinCode,
-  neoJoinExportName,
-  neoJoinFileName,
-  persistNeoJoinCode,
-} from '../../utils/neoJoinView';
+import { countViewProblems } from '../../utils/neoJoinView';
 import type { BuildProblem } from '../../types/vsumBuild';
 import { CanvasControls } from './canvas/CanvasControls';
 import { CanvasDropOverlay } from './canvas/CanvasDropOverlay';
@@ -397,6 +393,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     const [expandedFileId, setExpandedFileId] = useState<string | null>(null);
     const [connectionDragState, setConnectionDragState] = useState<ConnectionDragState | null>(null);
     const [codeEditorState, setCodeEditorState] = useState<CodeEditorState | null>(null);
+    const [neoJoinEditor, setNeoJoinEditor] = useState<NeoJoinEditorState | null>(null);
     const [routingStyle] = useState<'curved' | 'orthogonal'>('orthogonal');
     const [hoveredMergeGroup, setHoveredMergeGroup] = useState<string | null>(null);
     const [pendingDelete, setPendingDelete] = useState<PendingDeleteState | null>(null);
@@ -474,8 +471,17 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     nodesRef.current = nodes;
 
     const [circle, setCircle] = useCircleContainment(nodes);
-    const { viewTypes, addViewType, deleteViewType, updateAngle, unlinkNode, setViewFile } = useViewTypes(vsumId);
-    const [neoJoinEditor, setNeoJoinEditor] = useState<NeoJoinEditorState | null>(null);
+    const syncBaseRef = useRef<() => ViewSyncBase>(() => ({ metaModelIds: [], metaModelRelationRequests: null }));
+    const {
+      viewTypes,
+      isLoaded: viewsReady,
+      addViewType,
+      deleteViewType,
+      updateAngle,
+      unlinkNode,
+      updateViewTypeQuery,
+      migrateLegacyViewTypes,
+    } = useViewTypes(vsumId, () => syncBaseRef.current());
     const viewProblemCounts = useMemo(
       () => countViewProblems(buildProblems ?? [], viewTypes),
       [buildProblems, viewTypes],
@@ -1141,10 +1147,19 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
             storeSnapshot = null;
           }
         }
-        return buildWorkspaceSnapshot(nodes, edges, storeSnapshot);
+        const snapshot = buildWorkspaceSnapshot(nodes, edges, storeSnapshot);
+        return viewsReady ? { ...snapshot, viewRequests: toViewRequests(viewTypes) } : snapshot;
       },
-      [nodes, edges],
+      [nodes, edges, viewsReady, viewTypes],
     );
+
+    syncBaseRef.current = () => {
+      const prepared = prepareSnapshotForSyncSave(getWorkspaceSnapshot());
+      return {
+        metaModelIds: prepared.metaModelIds,
+        metaModelRelationRequests: prepared.metaModelRelationRequests,
+      };
+    };
 
     // ── Drag & drop ───────────────────────────────────────────────────────────
 
@@ -1265,8 +1280,22 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       viewTypeEditable: boolean,
     ) => {
       if (!editable) return;
-      addViewType({ label, scope, angle, linkedNodeIds, editable: viewTypeEditable });
-    }, [addViewType, editable]);
+      const metamodels = linkedNodeIds.flatMap(nodeId => {
+        const node = nodes.find(n => n.id === nodeId);
+        const ref = node ? metamodelRefFromNode(node) : null;
+        return ref ? [ref] : [];
+      });
+      void addViewType({
+        label,
+        scope,
+        angle,
+        linkedNodeIds,
+        editable: viewTypeEditable,
+        metamodels,
+      }).catch(error => {
+        console.error('Failed to create view type', error);
+      });
+    }, [addViewType, editable, nodes]);
 
     const openViewTypeEditor = useCallback(async (
       viewTypeId: string,
@@ -1274,36 +1303,55 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     ) => {
       const viewType = viewTypes.find(vt => vt.id === viewTypeId);
       if (!viewType) return;
-      const initialCode = await fetchNeoJoinCode(
-        viewType,
-        () => buildInitialNeoJoinCode(viewType, viewTypes, nodes),
-      );
+      let initialCode = viewType.query ?? '';
+      if (!initialCode.trim() && typeof viewType.fileId === 'number') {
+        try {
+          initialCode = await apiService.getFile(viewType.fileId);
+        } catch (error) {
+          console.error('Failed to fetch NeoJoin file', error);
+        }
+      }
+      if (!initialCode.trim()) {
+        initialCode = buildNeoJoinSkeleton(viewType.label);
+      }
       setNeoJoinEditor({
+        isOpen: true,
+        edgeId: viewTypeId,
         viewTypeId,
-        title: `NeoJoin view: ${viewType.label}`,
+        label: viewType.label,
         initialCode,
+        fileId: viewType.fileId ?? null,
         initialPosition,
       });
-    }, [viewTypes, nodes]);
+    }, [viewTypes]);
+
+    const handleEditViewQuery = useCallback((viewTypeId: string) => {
+      void openViewTypeEditor(viewTypeId);
+    }, [openViewTypeEditor]);
 
     const openViewTypeFileAt = useCallback((
-      fileStorageId: number,
+      fileId: number,
       position?: NeoJoinEditorState['initialPosition'],
     ): boolean => {
-      const viewType = viewTypes.find(vt => vt.fileStorageId === fileStorageId);
+      const viewType = viewTypes.find(vt => vt.fileId === fileId);
       if (!viewType) return false;
       void openViewTypeEditor(viewType.id, position);
       return true;
     }, [viewTypes, openViewTypeEditor]);
 
     const handleSaveNeoJoin = useCallback(async (code: string) => {
-      const viewType = viewTypes.find(vt => vt.id === neoJoinEditor?.viewTypeId);
-      if (!viewType) return;
-      const fileName = viewType.fileName
-        ?? neoJoinFileName(neoJoinExportName(viewType, viewTypes));
-      const fileStorageId = await persistNeoJoinCode(code, fileName, viewType.fileStorageId);
-      setViewFile(viewType.id, fileStorageId, fileName);
-    }, [viewTypes, neoJoinEditor, setViewFile]);
+      if (!neoJoinEditor) return;
+      try {
+        const fileId = await persistNeoJoinCode(code, neoJoinEditor.fileId, neoJoinEditor.label);
+        updateViewTypeQuery(neoJoinEditor.viewTypeId, code, fileId);
+        if (typeof fileId === 'number') {
+          setNeoJoinEditor(prev => (prev ? { ...prev, fileId } : prev));
+        }
+      } catch (err) {
+        console.error('Failed to save NeoJoin file', err);
+        throw err;
+      }
+    }, [neoJoinEditor, updateViewTypeQuery]);
 
     // ── Auto-layout ───────────────────────────────────────────────────────────
 
@@ -1733,7 +1781,14 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       canUndo,
       canRedo,
       getReactionEdges,
-      getViewTypes: () => viewTypes,
+      getViewTypes: () => linkViewTypesToNodes(
+        viewTypes,
+        nodes.flatMap(node => {
+          if (node.type !== 'ecoreFile') return [];
+          const ref = metamodelRefFromNode(node);
+          return ref ? [ref] : [];
+        }),
+      ),
       getWorkspaceSnapshot,
       autoLayoutEcoreBoxes,
       fitUmlView,
@@ -1868,6 +1923,28 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     );
 
     const ecoreNodes = nodes.filter(n => n.type === 'ecoreFile');
+    const linkedViewTypes = linkViewTypesToNodes(
+      viewTypes,
+      ecoreNodes.flatMap(node => {
+        const ref = metamodelRefFromNode(node);
+        return ref ? [ref] : [];
+      }),
+    );
+    const viewMigrationKey = ecoreNodes.map(node => {
+      const ref = metamodelRefFromNode(node);
+      return ref ? `${ref.nodeId}:${ref.sourceId}` : node.id;
+    }).join('|');
+
+    useEffect(() => {
+      if (!viewsReady || ecoreNodes.length === 0) return;
+      const metamodels = ecoreNodes.flatMap(node => {
+        const ref = metamodelRefFromNode(node);
+        return ref ? [ref] : [];
+      });
+      void migrateLegacyViewTypes(metamodels).catch(error => {
+        console.error('Failed to migrate stored view types', error);
+      });
+    }, [viewsReady, viewMigrationKey, ecoreNodes, migrateLegacyViewTypes]);
     const connectionLinePositions = computeConnectionLinePositions(connectionDragState, reactFlowInstance);
     const connectionPreviewPoints = useMemo(() => {
       if (!connectionLinePositions || !connectionDragState?.sourceNodeId || !reactFlowInstance) {
@@ -1996,10 +2073,11 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
             onResize={handleCircleResize}
             onResizePreview={handleCircleResizePreview}
             onResizeEnd={() => { }}
-            viewTypes={viewTypes}
+            viewTypes={linkedViewTypes}
             ecoreNodes={ecoreNodes}
             onAddViewType={handleAddViewType}
             onDeleteViewType={editable ? deleteViewType : () => {}}
+            onEditViewQuery={handleEditViewQuery}
             onUpdateViewTypeAngle={editable ? updateAngle : () => {}}
             onUnlinkNode={editable ? unlinkNode : () => {}}
             onEditViewType={(id) => { void openViewTypeEditor(id); }}

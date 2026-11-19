@@ -1,9 +1,8 @@
 import type { Node } from 'reactflow';
 import { apiService, type ViewRequest } from '../services/api';
-import type { ViewType } from '../hooks/useViewTypes';
+import type { ViewType } from './viewTypeSync';
 import type { BuildProblem } from '../types/vsumBuild';
 import { isViewsProblem } from './buildProblems';
-import { resolveReactionFileId } from './reactionFile';
 
 const NEO_JOIN_EXTENSION = '.nj';
 
@@ -78,32 +77,14 @@ export function buildInitialNeoJoinCode(
  * Stores the NeoJoin definition of a view type: a new file for the first save, otherwise the
  * existing file is overwritten and keeps its id.
  */
-export async function persistNeoJoinCode(
-  code: string,
-  fileName: string,
-  fileStorageId: number | null | undefined,
-): Promise<number> {
-  const file = new File([code], fileName, { type: 'text/plain;charset=utf-8' });
-  if (fileStorageId == null) {
-    const uploadResult = await apiService.uploadFile(file, 'NEO_JOIN');
-    const newId = resolveReactionFileId(uploadResult?.data);
-    if (newId == null) {
-      throw new Error('NeoJoin file upload succeeded but did not return a file ID.');
-    }
-    return newId;
-  }
-  await apiService.updateNeoJoinFile(fileStorageId, file);
-  return fileStorageId;
-}
-
 /** Reads the stored definition of a view type, or the generated starting point if it has none yet. */
 export async function fetchNeoJoinCode(
   viewType: ViewType,
   buildDefault: () => string,
 ): Promise<string> {
-  if (viewType.fileStorageId != null) {
+  if (typeof viewType.fileId === 'number') {
     try {
-      const stored = await apiService.getFile(viewType.fileStorageId);
+      const stored = await apiService.getFile(viewType.fileId);
       if (stored.trim()) return stored;
     } catch (error) {
       console.error('Failed to fetch NeoJoin file', error);
@@ -132,26 +113,29 @@ export function buildViewRequests(
   nodes: readonly Node[],
 ): ViewRequest[] {
   return viewTypes.flatMap(viewType => {
-    if (viewType.fileStorageId == null) return [];
-    const metaModelIds = Array.from(new Set(
+    if (typeof viewType.fileId !== 'number') return [];
+    const linkedIds = Array.from(new Set(
       linkedMetaModelNodes(viewType, nodes)
         .map(n => n.data?.metaModelSourceId ?? n.data?.metaModelId)
         .filter((id): id is number => typeof id === 'number'),
     ));
+    const metaModelIds = linkedIds.length > 0
+      ? linkedIds
+      : (viewType.metaModelSourceIds ?? []).filter(id => Number.isFinite(id) && id > 0);
     if (metaModelIds.length === 0) return [];
     return [{
-      // The file name is fixed at the first save, so the view keeps its name when others are deleted.
-      name: viewType.fileName?.replace(/\.nj$/, '') ?? neoJoinExportName(viewType, viewTypes),
+      ...(typeof viewType.backendId === 'number' ? { id: viewType.backendId } : {}),
+      name: viewType.fileName?.replace(/\.nj$/, '') ?? viewType.label,
       metaModelIds,
-      fileStorageId: viewType.fileStorageId,
+      fileStorageId: viewType.fileId,
     }];
   });
 }
 
 /** Whether a VIEWS problem belongs to the NeoJoin file of this view type. */
 function problemBelongsTo(problem: BuildProblem, viewType: ViewType): boolean {
-  if (problem.fileId != null && viewType.fileStorageId != null) {
-    return problem.fileId === viewType.fileStorageId;
+  if (problem.fileId != null && typeof viewType.fileId === 'number') {
+    return problem.fileId === viewType.fileId;
   }
   return Boolean(problem.file && viewType.fileName && problem.file === viewType.fileName);
 }

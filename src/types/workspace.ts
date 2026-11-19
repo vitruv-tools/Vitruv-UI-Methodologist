@@ -1,8 +1,9 @@
-import { MetaModelRelationRequest } from '../services/api';
+import { MetaModelRelationRequest, ViewRequest } from '../services/api';
 
 export interface WorkspaceSnapshot {
   metaModelIds: number[];
   metaModelRelationRequests: MetaModelRelationRequest[];
+  viewRequests?: ViewRequest[];
 }
 
 export interface WorkspaceSnapshotRequest {

@@ -641,6 +641,25 @@ describe('ApiService – updateUserName', () => {
   });
 });
 
+describe('ApiService – updateNeoJoinFile', () => {
+  const { AuthService } = (authModule as unknown) as { AuthService: { ensureValidToken: Mock } };
+  beforeEach(() => { AuthService.ensureValidToken.mockResolvedValue('mock-token'); });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('POSTs the query to update-neojoin', async () => {
+    mockFetch({ data: 'ok', message: 'updated' });
+    const file = new File(['export Brake to "u"\n'], 'Brake.nj', { type: 'text/plain' });
+
+    const result = await apiService.updateNeoJoinFile(12, file);
+
+    expect(result).toEqual({ data: 'ok', message: 'updated' });
+    const [url, options] = (global.fetch as Mock).mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/api/upload/12/update-neojoin');
+    expect(options.method).toBe('POST');
+    expect(options.body).toBeInstanceOf(FormData);
+  });
+});
+
 describe('ApiService – getLowCodeReactionsMetadata', () => {
   const { AuthService } = (authModule as unknown) as { AuthService: { ensureValidToken: Mock } };
   beforeEach(() => { AuthService.ensureValidToken.mockResolvedValue('mock-token'); });
