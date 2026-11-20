@@ -11,7 +11,7 @@ interface AuthContextType {
     signIn: (username: string, password: string) => Promise<User>;
     fastLoginWithCode: (authorizationCode: string) => Promise<User>;
     signUp: (userData: SignUpCredentials) => Promise<void>;
-    signOut: () => Promise<void>;
+    signOut: () => void;
     refreshToken: () => Promise<any>;
     refreshCurrentUser: () => Promise<User | null>;
 }
@@ -298,7 +298,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
         }
     }, []);
 
-    const signOut = useCallback(async () => {
+    const signOut = useCallback(() => {
         try {
             AuthService.signOut();
             setUser(null);

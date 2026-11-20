@@ -48,12 +48,9 @@ export const reactionsMonarch: languages.IMonarchLanguage = {
         }
       }],
 
-      [/\d+\.\d+[eE][+-]\d+/, 'number.float'],
-      [/\d+\.\d+[eE]\d+/, 'number.float'],
-      [/\.\d+[eE][+-]\d+/, 'number.float'],
-      [/\.\d+[eE]\d+/, 'number.float'],
-      [/\d+\.\d+/, 'number.float'],
-      [/\.\d+/, 'number.float'],
+      // One quantifier per rule. A combined pattern such as \d+\.\d+ backtracks super-linearly.
+      [/\d+\.(?=\d)/, { token: 'number.float', next: '@floatFrac' }],
+      [/\.(?=\d)/, { token: 'number.float', next: '@floatFrac' }],
       [/0[xX][0-9a-fA-F]+/, 'number.hex'],
       [/\d+/, 'number'],
 
@@ -65,6 +62,27 @@ export const reactionsMonarch: languages.IMonarchLanguage = {
       [/'[^\\']'/, 'string'],
       [/(')(@escapes)(')/, ['string', 'string.escape', 'string']],
       [/'/, 'string.invalid']
+    ],
+
+    floatFrac: [
+      [/\d+/, { token: 'number.float', switchTo: '@floatExp' }],
+      [/./, { token: '@rematch', next: '@pop' }],
+    ],
+
+    floatExp: [
+      [/[eE](?=[+-]\d)/, { token: 'number.float', switchTo: '@floatSign' }],
+      [/[eE](?=\d)/, { token: 'number.float', switchTo: '@floatDigits' }],
+      [/./, { token: '@rematch', next: '@pop' }],
+    ],
+
+    floatSign: [
+      [/[+-]/, { token: 'number.float', switchTo: '@floatDigits' }],
+      [/./, { token: '@rematch', next: '@pop' }],
+    ],
+
+    floatDigits: [
+      [/\d+/, { token: 'number.float', next: '@pop' }],
+      [/./, { token: '@rematch', next: '@pop' }],
     ],
 
     comment: [
