@@ -249,6 +249,11 @@ export function renameEcoreFileNode(nodes: Node[], id: string, newFileName: stri
   if (!nextFileName) return nodes;
   return nodes.map((node) => {
     if (node.id !== id || node.type !== 'ecoreFile') return node;
-    return { ...node, data: { ...node.data, fileName: nextFileName } };
+    // A display name is what the box shows, so it has to follow the new name.
+    const renamed = { ...node.data, fileName: nextFileName };
+    if (typeof node.data?.displayName === 'string') {
+      renamed.displayName = nextFileName.replace(/\.ecore$/i, '');
+    }
+    return { ...node, data: renamed };
   });
 }
