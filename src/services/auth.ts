@@ -411,7 +411,7 @@ export class AuthService {
     const now = Date.now();
     const refreshExpiry = Number.parseInt(refreshExpiresAt, 10);
     if (Number.isFinite(refreshExpiry) && now >= refreshExpiry) {
-      await this.signOut();
+      this.signOut();
       return null;
     }
 
@@ -449,7 +449,7 @@ export class AuthService {
       return data;
     } catch (error) {
       console.error('Failed to refresh token:', error);
-      await this.signOut();
+      this.signOut();
       return null;
     }
   }
@@ -498,7 +498,7 @@ export class AuthService {
 
     const refreshValid = !!refreshToken && !!refreshExpiresAt && now < Number.parseInt(refreshExpiresAt, 10);
     if (!refreshValid) {
-      await this.signOut();
+      this.signOut();
       return null;
     }
 
@@ -510,7 +510,7 @@ export class AuthService {
     } catch (error) {
       console.error('Failed to refresh token:', error);
     }
-    await this.signOut();
+    this.signOut();
     return null;
   }
 

@@ -48,7 +48,12 @@ export const reactionsMonarch: languages.IMonarchLanguage = {
         }
       }],
 
-      [/(?:\d+\.\d+|\.\d+)(?:[eE][+-]?\d+)?/, 'number.float'],
+      [/\d+\.\d+[eE][+-]\d+/, 'number.float'],
+      [/\d+\.\d+[eE]\d+/, 'number.float'],
+      [/\.\d+[eE][+-]\d+/, 'number.float'],
+      [/\.\d+[eE]\d+/, 'number.float'],
+      [/\d+\.\d+/, 'number.float'],
+      [/\.\d+/, 'number.float'],
       [/0[xX][0-9a-fA-F]+/, 'number.hex'],
       [/\d+/, 'number'],
 

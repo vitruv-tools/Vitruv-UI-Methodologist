@@ -1780,6 +1780,7 @@ function findNodeIdForMetamodel(canvasNodes: Node[], metamodel: string): string 
 export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumId, canvasNodes, onHighlightNode, filterNodeId, visible = true }) => {
   const vsumId = _vsumId ? Number(_vsumId) : null;
   const [hasBeenVisible, setHasBeenVisible] = useState(visible);
+  const ruleEditorRef = useRef<HTMLElement>(null);
   if (visible && !hasBeenVisible) setHasBeenVisible(true);
   const colorMap = useMemo(() => buildMetamodelColorMap(canvasNodes), [canvasNodes]);
   const metaClasses = useMemo(() => buildMetaClasses(canvasNodes), [canvasNodes]);
@@ -1814,6 +1815,14 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
   const selectionLockedRef = useRef(false);
   const [selectedRule, setSelectedRule] = useState<ConstraintRule | null>(null);
   const [selectedRuleSet, setSelectedRuleSet] = useState<RuleSet | null>(null);
+
+  useEffect(() => {
+    const editor = ruleEditorRef.current;
+    if (!editor) return;
+    const stopKey = (event: KeyboardEvent) => event.stopPropagation();
+    editor.addEventListener('keydown', stopKey);
+    return () => editor.removeEventListener('keydown', stopKey);
+  }, [selectedRule, hasBeenVisible]);
   const [searchQuery, setSearchQuery] = useState('');
   // Create requests still running, with the newest version of the set to send once they return:
   // the handlers below may run twice (React StrictMode) and users can edit faster than requests.
@@ -2071,20 +2080,18 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
 
       {/* Bottom editor — floats over the center canvas, re-enables pointer events */}
       {selectedRule && hasBeenVisible && (
-        <section aria-label="Rule editor" style={{ position: 'absolute', bottom: 0, left: 260, right: 300, pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }}>
-          <form onSubmit={event => event.preventDefault()} onKeyDown={event => event.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, margin: 0 }}>
-            <EditorPanel
-              rule={selectedRule}
-              ruleSets={ruleSets}
-              colorMap={colorMap}
-              metaClasses={metaClasses}
-              onClose={() => { lockSelection(); setSelectedRule(null); onHighlightNode?.(null); }}
-              onSave={handleSaveRule}
-              vsumId={vsumId ?? undefined}
-              onHighlightNode={onHighlightNode}
-              canvasNodes={canvasNodes}
-            />
-          </form>
+        <section ref={ruleEditorRef} aria-label="Rule editor" style={{ position: 'absolute', bottom: 0, left: 260, right: 300, pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }}>
+          <EditorPanel
+            rule={selectedRule}
+            ruleSets={ruleSets}
+            colorMap={colorMap}
+            metaClasses={metaClasses}
+            onClose={() => { lockSelection(); setSelectedRule(null); onHighlightNode?.(null); }}
+            onSave={handleSaveRule}
+            vsumId={vsumId ?? undefined}
+            onHighlightNode={onHighlightNode}
+            canvasNodes={canvasNodes}
+          />
         </section>
       )}
       {selectedRuleSet && !selectedRule && (

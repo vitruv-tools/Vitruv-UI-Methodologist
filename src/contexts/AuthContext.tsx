@@ -122,7 +122,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
                 }
             } catch (error) {
                 console.error('Auth check failed:', error);
-                await AuthService.signOut();
+                AuthService.signOut();
             } finally {
                 setIsLoading(false);
             }
@@ -300,7 +300,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
 
     const signOut = useCallback(async () => {
         try {
-            await AuthService.signOut();
+            AuthService.signOut();
             setUser(null);
         } catch (error) {
             console.error('Sign out error:', error);
@@ -314,7 +314,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
         } catch (error) {
             console.error('Token refresh failed:', error);
             try {
-                await AuthService.signOut();
+                AuthService.signOut();
                 setUser(null);
             } catch {
                 setUser(null);
