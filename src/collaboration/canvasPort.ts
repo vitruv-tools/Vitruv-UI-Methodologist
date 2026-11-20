@@ -131,19 +131,20 @@ export function createCanvasPort(deps: CanvasPortDeps): CanvasPort {
       return null;
     }
   }
+}
 
-  function addMetaModel(canvas: CanvasHandle, model: ModelState, resolved: ResolvedMetaModel | null): void {
-    if (resolved === null) {
-      return;
-    }
-    canvas.addEcoreFile(resolved.fileName, resolved.fileContent, {
-      ...resolved.meta,
-      displayName: model.name,
-      // Not a change of this user: it must not be written into the project again.
-      fromServerLoad: true,
-      keepSelection: true,
-      position: model.position ?? undefined,
-      exactPosition: model.position !== null,
-    });
+/** Puts a metamodel another user added on the canvas, where they put it. */
+function addMetaModel(canvas: CanvasHandle, model: ModelState, resolved: ResolvedMetaModel | null): void {
+  if (resolved === null) {
+    return;
   }
+  canvas.addEcoreFile(resolved.fileName, resolved.fileContent, {
+    ...resolved.meta,
+    displayName: model.name,
+    // Not a change of this user: it must not be written into the project again.
+    fromServerLoad: true,
+    keepSelection: true,
+    position: model.position ?? undefined,
+    exactPosition: model.position !== null,
+  });
 }
