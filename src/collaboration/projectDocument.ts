@@ -1,0 +1,234 @@
+import * as Y from 'yjs';
+import { randomUniqueSuffix } from '../utils/secureRandom';
+import {
+  LAYOUT,
+  LAYOUT_META_MODELS,
+  LAYOUT_REACTIONS,
+  MODELS,
+  NOT_DELETED,
+  RELATIONS,
+  type ModelFields,
+  type Position,
+  type RelationFields,
+} from './document';
+import {
+  canonicalJson,
+  diffProjectState,
+  hasChanges,
+  pairKey,
+  readProjectState,
+  type ProjectChanges,
+  type ProjectState,
+} from './projectState';
+
+/**
+ * Origin of the changes this client makes to the document. The canvas already shows them, so they
+ * aren't reported as changes of other users.
+ */
+export const LOCAL_ORIGIN = Symbol('canvas');
+
+/** The part of a relation that a user changes. */
+export interface RelationInput {
+  sourceId: number;
+  targetId: number;
+  reactionFileId: number | null;
+  /** The mappings; the relation keeps its own if this is left out. */
+  fineGranular?: Record<string, unknown>[];
+}
+
+/**
+ * A project's shared document, read and changed in the terms of the canvas.
+ *
+ * Changes are operations of the user (add a metamodel, move it, delete it, ...), each one a single
+ * Yjs transaction with {@link LOCAL_ORIGIN}. The canvas is never written into the document as a
+ * whole: a state that lacks something another user just added would delete it.
+ *
+ * Deleting only marks elements as deleted (`softDeleted`); the server leaves those out when it
+ * writes the project back.
+ */
+export class ProjectDocument {
+  constructor(readonly doc: Y.Doc) {}
+
+  /**
+   * Whether the server has filled the document. Its maps for the layout are created then, never by
+   * a client: two clients creating them at the same time would lose the positions of one of them.
+   */
+  isLoaded(): boolean {
+    const layout = this.doc.getMap(LAYOUT);
+    return layout.get(LAYOUT_META_MODELS) instanceof Y.Map && layout.get(LAYOUT_REACTIONS) instanceof Y.Map;
+  }
+
+  read(): ProjectState {
+    return readProjectState(this.doc);
+  }
+
+  addModel(model: { sourceId: number; name: string; position: Position }): void {
+    this.write('add a metamodel', () => {
+      const models = this.doc.getMap(MODELS);
+      const key = String(model.sourceId);
+      const existing = models.get(key);
+      if (existing instanceof Y.Map) {
+        // Deleted before: it comes back, with the name and position it is added with now.
+        setIfChanged(existing, 'name', model.name);
+        setIfChanged(existing, 'softDeleted', false);
+        setIfChanged(existing, 'softDeletedVia', null);
+      } else {
+        models.set(key, element<ModelFields>({ name: model.name, ...NOT_DELETED }));
+      }
+      this.setPosition(key, model.position);
+    });
+  }
+
+  /** Deletes a metamodel, and with it its relations, which remember that this is why. */
+  removeModel(sourceId: number): void {
+    this.write('delete a metamodel', () => {
+      const key = String(sourceId);
+      const existing = this.doc.getMap(MODELS).get(key);
+      if (!(existing instanceof Y.Map) || existing.get('softDeleted') === true) {
+        return;
+      }
+      existing.set('softDeleted', true);
+      existing.set('softDeletedVia', null);
+      for (const [, relation] of this.relationElements()) {
+        const isTouched = relation.get('sourceId') === sourceId || relation.get('targetId') === sourceId;
+        if (isTouched && relation.get('softDeleted') !== true) {
+          relation.set('softDeleted', true);
+          relation.set('softDeletedVia', key);
+        }
+      }
+    });
+  }
+
+  renameModel(sourceId: number, name: string): void {
+    this.write('rename a metamodel', () => {
+      const existing = this.doc.getMap(MODELS).get(String(sourceId));
+      if (existing instanceof Y.Map) {
+        setIfChanged(existing, 'name', name);
+      }
+    });
+  }
+
+  /** Moves metamodels; only positions that differ are written. */
+  moveModels(positions: ReadonlyMap<number, Position>): void {
+    this.write('move metamodels', () => {
+      for (const [sourceId, position] of positions) {
+        this.setPosition(String(sourceId), position);
+      }
+    });
+  }
+
+  /**
+   * Sets the reaction file and mappings of the relation between two metamodels, adding the relation
+   * if there is none. A relation that was deleted isn't brought back: the pair gets a new one.
+   */
+  upsertRelation(input: RelationInput): void {
+    this.write('change a relation', () => {
+      const existing = this.liveRelation(input.sourceId, input.targetId);
+      if (existing === undefined) {
+        this.doc.getMap(RELATIONS).set(
+          randomUniqueSuffix(),
+          element<RelationFields>({
+            backendId: null,
+            sourceId: input.sourceId,
+            targetId: input.targetId,
+            reactionFileId: input.reactionFileId,
+            fineGranular: input.fineGranular ?? [],
+            ...NOT_DELETED,
+          }),
+        );
+        return;
+      }
+      setIfChanged(existing, 'reactionFileId', input.reactionFileId);
+      if (input.fineGranular !== undefined && canonicalJson(existing.get('fineGranular')) !== canonicalJson(input.fineGranular)) {
+        existing.set('fineGranular', input.fineGranular);
+      }
+    });
+  }
+
+  /** Deletes the relation between two metamodels. */
+  removeRelation(sourceId: number, targetId: number): void {
+    this.write('delete a relation', () => {
+      for (const [, relation] of this.relationElements()) {
+        const isPair = relation.get('sourceId') === sourceId && relation.get('targetId') === targetId;
+        if (isPair && relation.get('softDeleted') !== true) {
+          relation.set('softDeleted', true);
+          relation.set('softDeletedVia', null);
+        }
+      }
+    });
+  }
+
+  /** Sets entries of the reaction layout; an entry given as `undefined` is removed. */
+  setReactionLayout(entries: Record<string, unknown>): void {
+    this.write('change the reaction layout', () => {
+      const reactions = this.doc.getMap(LAYOUT).get(LAYOUT_REACTIONS) as Y.Map<unknown>;
+      for (const [key, value] of Object.entries(entries)) {
+        if (value === undefined) {
+          reactions.delete(key);
+        } else if (canonicalJson(reactions.get(key)) !== canonicalJson(value)) {
+          reactions.set(key, value);
+        }
+      }
+    });
+  }
+
+  /**
+   * Reports what other users (and the server) change, as what differs from before, together with
+   * the whole state it leads to. The user's own changes aren't reported. Returns the state at this
+   * moment, which the first changes are relative to, and a function that stops listening.
+   */
+  onRemoteChange(
+    listener: (changes: ProjectChanges, state: ProjectState) => void,
+  ): { state: ProjectState; stop: () => void } {
+    let previous = this.read();
+    const onUpdate = (_update: Uint8Array, origin: unknown) => {
+      const next = this.read();
+      const changes = diffProjectState(previous, next);
+      previous = next;
+      if (origin !== LOCAL_ORIGIN && hasChanges(changes)) {
+        listener(changes, next);
+      }
+    };
+    this.doc.on('update', onUpdate);
+    return { state: previous, stop: () => this.doc.off('update', onUpdate) };
+  }
+
+  /** Runs a change as one transaction, unless the document isn't loaded yet. */
+  private write(what: string, change: () => void): void {
+    if (!this.isLoaded()) {
+      console.warn(`Not able to ${what}: the project is not loaded into the shared document yet.`);
+      return;
+    }
+    this.doc.transact(change, LOCAL_ORIGIN);
+  }
+
+  private setPosition(key: string, position: Position): void {
+    const positions = this.doc.getMap(LAYOUT).get(LAYOUT_META_MODELS) as Y.Map<unknown>;
+    const current = positions.get(key) as Position | undefined;
+    if (current?.x !== position.x || current?.y !== position.y) {
+      positions.set(key, { x: position.x, y: position.y });
+    }
+  }
+
+  private relationElements(): [string, Y.Map<unknown>][] {
+    return [...this.doc.getMap(RELATIONS).entries()].filter(
+      (entry): entry is [string, Y.Map<unknown>] => entry[1] instanceof Y.Map,
+    );
+  }
+
+  /** The element of the relation the document shows for a pair: the one the canvas shows. */
+  private liveRelation(sourceId: number, targetId: number): Y.Map<unknown> | undefined {
+    const key = readProjectState(this.doc).relations.get(pairKey(sourceId, targetId))?.key;
+    return key === undefined ? undefined : this.relationElements().find(([k]) => k === key)?.[1];
+  }
+}
+
+function element<T>(fields: T): Y.Map<unknown> {
+  return new Y.Map<unknown>(Object.entries(fields as Record<string, unknown>));
+}
+
+function setIfChanged(map: Y.Map<unknown>, key: string, value: unknown): void {
+  if (map.get(key) !== value) {
+    map.set(key, value);
+  }
+}

@@ -1,0 +1,246 @@
+import type { Position } from './document';
+import type { ProjectDocument } from './projectDocument';
+import {
+  diffProjectState,
+  pairKey,
+  type ProjectChanges,
+  type ProjectState,
+} from './projectState';
+
+/** What {@link CanvasSync} needs from the canvas. */
+export interface CanvasPort {
+  /**
+   * The metamodels and relations the canvas shows. A metamodel that is being dragged has no
+   * position (`null`), since the canvas can't say where it ends up.
+   */
+  read(): ProjectState;
+  /** Shows what changed in the project on the canvas; resolves once that is done. */
+  apply(changes: ProjectChanges): Promise<void>;
+}
+
+/**
+ * Keeps the canvas and a project's shared document in line.
+ *
+ * **Document to canvas.** When it starts, the canvas is made to show the document, whatever it
+ * showed before. Afterwards the changes of other users are applied to the canvas, one after the
+ * other.
+ *
+ * **Canvas to document.** The canvas never replaces the document: a canvas that lacks something
+ * another user just added would delete it. Instead, what the user changed on the canvas since it
+ * last matched the document is written into the document, and only additions and changes:
+ * - New metamodels and relations, renames, moves and new reaction files: {@link pushLocalChanges}.
+ * - Fine-granular mappings of relations: {@link pushMappings}, when the user saved them.
+ * - Deleting needs an explicit call ({@link removeModel}, {@link removeRelation}) for what the user
+ *   deleted. A canvas that is cleared (another project is loaded, a tab is restored) deletes nothing.
+ *
+ * Nothing is written while changes of other users are still being applied. The canvas doesn't show
+ * them completely yet, and writing from it could overwrite their newer values.
+ */
+export class CanvasSync {
+  /** What the canvas and the document agree on: the document, and what was written into it. */
+  private known: ProjectState | undefined;
+  private stopListening: (() => void) | undefined;
+  private queue: Promise<void> = Promise.resolve();
+  /** Changes of other users that are queued or being applied. */
+  private pending = 0;
+  private pushAfter: 'changes' | 'mappings' | undefined;
+  private stopped = false;
+
+  constructor(
+    private readonly project: ProjectDocument,
+    private readonly canvas: CanvasPort,
+  ) {}
+
+  /**
+   * Makes the canvas show the project, and follows the project from now on.
+   *
+   * @throws Error if the project isn't loaded into the document: it would take the canvas away
+   */
+  async start(): Promise<void> {
+    if (!this.project.isLoaded()) {
+      throw new Error('The project is not loaded into the shared document yet');
+    }
+    const { state, stop } = this.project.onRemoteChange((changes, next) => this.enqueue(changes, next));
+    this.stopListening = stop;
+    this.enqueue(diffProjectState(this.canvas.read(), state), state);
+    await this.whenIdle();
+  }
+
+  /** Stops following the project. Changes that are queued are dropped. */
+  stop(): void {
+    this.stopped = true;
+    this.stopListening?.();
+    this.stopListening = undefined;
+    this.known = undefined;
+  }
+
+  /** Resolves once the changes of other users that arrived are shown on the canvas. */
+  async whenIdle(): Promise<void> {
+    while (this.pending > 0) {
+      await this.queue;
+    }
+  }
+
+  /**
+   * Writes what the user changed on the canvas into the document: new metamodels and relations,
+   * renames, moves and reaction files. Mappings and deletions are not part of it.
+   */
+  pushLocalChanges(): void {
+    const known = this.ready('changes');
+    if (known === undefined) {
+      return;
+    }
+    const canvas = this.canvas.read();
+    const changes = diffProjectState(known, canvas, { compareMappings: false });
+    for (const model of changes.addedModels) {
+      // Without a position the model is added once the canvas knows it, with the next push.
+      if (model.position !== null) {
+        this.project.addModel({ sourceId: model.sourceId, name: model.name, position: model.position });
+      }
+    }
+    for (const { sourceId, name } of changes.renamedModels) {
+      this.project.renameModel(sourceId, name);
+    }
+    if (changes.movedModels.length > 0) {
+      this.project.moveModels(new Map(changes.movedModels.map(({ sourceId, position }) => [sourceId, position as Position])));
+    }
+    for (const relation of changes.upsertedRelations) {
+      this.project.upsertRelation({
+        sourceId: relation.sourceId,
+        targetId: relation.targetId,
+        reactionFileId: relation.reactionFileId,
+      });
+    }
+    this.learn(
+      changes.addedModels.filter((model) => model.position !== null).map((model) => model.sourceId),
+      changes.renamedModels.map((model) => model.sourceId),
+      changes.movedModels.map((model) => model.sourceId),
+      changes.upsertedRelations,
+    );
+  }
+
+  /**
+   * Writes the fine-granular mappings of the relations the canvas shows into the document, for the
+   * relations whose mappings differ. Called when the user saved a mapping.
+   */
+  pushMappings(): void {
+    const known = this.ready('mappings');
+    if (known === undefined) {
+      return;
+    }
+    const changes = diffProjectState(known, this.canvas.read());
+    for (const relation of changes.upsertedRelations) {
+      this.project.upsertRelation({
+        sourceId: relation.sourceId,
+        targetId: relation.targetId,
+        reactionFileId: relation.reactionFileId,
+        fineGranular: relation.fineGranular,
+      });
+    }
+    this.learn([], [], [], changes.upsertedRelations);
+  }
+
+  /** Writes entries of the reaction layout into the document. */
+  pushReactionLayout(entries: Record<string, unknown>): void {
+    if (this.known === undefined) {
+      return;
+    }
+    this.project.setReactionLayout(entries);
+    this.known = { ...this.known, reactionLayout: this.project.read().reactionLayout };
+  }
+
+  /** The user deleted a metamodel from the canvas. */
+  removeModel(sourceId: number): void {
+    if (this.known === undefined) {
+      return;
+    }
+    this.project.removeModel(sourceId);
+    this.known = this.project.read();
+  }
+
+  /** The user deleted a relation from the canvas. */
+  removeRelation(sourceId: number, targetId: number): void {
+    if (this.known === undefined) {
+      return;
+    }
+    this.project.removeRelation(sourceId, targetId);
+    this.known = this.project.read();
+  }
+
+  /** The known state if writing is allowed now; otherwise remembers to write when it is. */
+  private ready(push: 'changes' | 'mappings'): ProjectState | undefined {
+    if (this.stopped || this.known === undefined) {
+      return undefined;
+    }
+    if (this.pending > 0) {
+      this.pushAfter = this.pushAfter === 'mappings' ? 'mappings' : push;
+      return undefined;
+    }
+    return this.known;
+  }
+
+  /** After writing: what was written is now what canvas and document agree on. */
+  private learn(
+    addedModels: number[],
+    renamedModels: number[],
+    movedModels: number[],
+    relations: { sourceId: number; targetId: number }[],
+  ): void {
+    const known = this.known;
+    if (known === undefined) {
+      return;
+    }
+    const document = this.project.read();
+    const models = new Map(known.models);
+    for (const id of [...addedModels, ...renamedModels, ...movedModels]) {
+      const model = document.models.get(id);
+      if (model !== undefined) {
+        models.set(id, model);
+      }
+    }
+    const relationStates = new Map(known.relations);
+    for (const { sourceId, targetId } of relations) {
+      const pair = pairKey(sourceId, targetId);
+      const relation = document.relations.get(pair);
+      if (relation !== undefined) {
+        relationStates.set(pair, relation);
+      }
+    }
+    this.known = { ...known, models, relations: relationStates };
+  }
+
+  private enqueue(changes: ProjectChanges, state: ProjectState): void {
+    this.pending += 1;
+    this.queue = this.queue.then(() => this.applyToCanvas(changes, state));
+  }
+
+  private async applyToCanvas(changes: ProjectChanges, state: ProjectState): Promise<void> {
+    try {
+      if (!this.stopped) {
+        await this.canvas.apply(changes);
+        this.known = state;
+      }
+    } catch (error) {
+      // The canvas may now differ from the document; the next change of the document is applied anyway.
+      console.error('Showing the changes of the shared project on the canvas failed:', error);
+      this.known = state;
+    } finally {
+      this.pending -= 1;
+    }
+    if (this.pending === 0 && this.pushAfter !== undefined && !this.stopped) {
+      const push = this.pushAfter;
+      this.pushAfter = undefined;
+      if (push === 'mappings') {
+        this.pushMappings();
+      } else {
+        this.pushLocalChanges();
+      }
+    }
+  }
+}
+
+/** What the canvas needs from {@link CanvasSync}: to write the user's changes into the project. */
+export type CanvasCollaboration = Pick<
+  CanvasSync,
+  'pushLocalChanges' | 'pushMappings' | 'pushReactionLayout' | 'removeModel' | 'removeRelation'
+>;

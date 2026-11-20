@@ -11,6 +11,7 @@ import { apiService, VsumRole, VsumUserResponse } from '../services/api';
 import type { EditableVsumDetails, VsumDetails, VsumMetaModelRef } from '../types';
 import { appendMetaModelVersion } from '../utils/metaModelVersion';
 import { useProjectStore } from '../store/Project';
+import { findProjectMetaModel } from '../collaboration/findProjectMetaModel';
 import { createVsumDetailsStore, getVsumDetailsStore, hasVsumDetailsStore } from '../store/VsumDetails';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../types/workspace';
 import { MODAL_Z_INDEX, isAnyModalOpen, useModalBodyLock } from '../components/ui/modalUtils';
@@ -89,6 +90,9 @@ import {
 } from '../utils/workspaceSnapshotUtils';
 import { downloadBlobAsFile } from '../utils/downloadFile';
 import { syncVsumWorkspaceChanges } from '../utils/vsumSyncSave';
+import { CollaborationStatus } from '../components/canvas/CollaborationStatus';
+import { useCanvasCollaboration } from '../collaboration/useCanvasCollaboration';
+import type { ResolvedMetaModel } from '../collaboration/canvasPort';
 import {
   getCanvasProjectLoadFailureState,
   type CanvasProjectLoadState,
@@ -525,6 +529,52 @@ export const CanvasPage: React.FC = () => {
     || effectiveVsumRole === 'MEMBER'
     || Boolean(navAccess?.sharedBy);
 
+  // ── Live collaboration ────────────────────────────────────────────────────
+  // With a collaboration server, everyone who has the project open shares one document: the user's
+  // changes are written into it as they are made, and the server saves them. There is no Save and
+  // nothing is unsaved. Without a server, the canvas works as it always did.
+  const libraryModelsRef = useRef({ drawerModels, myLibraryModels, publicLibraryModels });
+  libraryModelsRef.current = { drawerModels, myLibraryModels, publicLibraryModels };
+
+  /** Finds a metamodel another user added to the project, and loads its ecore file. */
+  const resolveSharedMetaModel = useCallback(async (sourceId: number): Promise<ResolvedMetaModel | null> => {
+    const { drawerModels: inProject, myLibraryModels: mine, publicLibraryModels: shared } = libraryModelsRef.current;
+    let model: DrawerModel | undefined = [...inProject, ...mine, ...shared].find(m => m.sourceId === sourceId);
+    if (!model) {
+      // Not in a library this user can see, e.g. a private one: it is in the project once saved.
+      const saved = activeProjectId === undefined ? null : await findProjectMetaModel(activeProjectId, sourceId);
+      if (saved) model = metaModelToDrawerModel(saved, true);
+    }
+    if (!model?.ecoreFileId) return null;
+    const fileContent = await apiService.getFile(model.ecoreFileId);
+    return {
+      fileName: `${appendMetaModelVersion(model.name, model.version)}.ecore`,
+      fileContent,
+      meta: {
+        version: model.version,
+        domain: model.domain,
+        description: model.description,
+        metaModelId: model.id,
+        // The shared project and sync-changes know metamodels by this library ID.
+        metaModelSourceId: model.sourceId ?? model.id,
+        ecoreFileId: model.ecoreFileId,
+        genModelFileId: model.genModelFileId,
+      },
+    };
+  }, [activeProjectId]);
+  const getCanvasHandle = useCallback(() => flowCanvasRef.current ?? null, []);
+  const collaboration = useCanvasCollaboration({
+    projectId: activeProjectId,
+    canvasLoaded: projectLoadState.status === 'ready',
+    instanceId: activeInstanceId,
+    getCanvas: getCanvasHandle,
+    resolveMetaModel: resolveSharedMetaModel,
+  });
+  const collaborative = collaboration.enabled;
+  /** The canvas shows the project as loading until it shows the shared project too. */
+  const shownLoadState: CanvasProjectLoadState =
+    collaboration.holding && projectLoadState.status === 'ready' ? { status: 'hydrating' } : projectLoadState;
+
   const { problems: validationProblems, failure: validationFailure } = useVsumValidation(
     activeProjectId,
     effectiveVsumRole,
@@ -849,6 +899,7 @@ export const CanvasPage: React.FC = () => {
   }), [vsumName, drawerModels, myLibraryModels, publicLibraryModels, addedModelIds, umlPanels, topPanelId, getLiveSnapshot]);
 
   const isInstanceDirty = useCallback((instanceId: string): boolean => {
+    if (collaborative) return false; // the server saves the changes: nothing is unsaved
     const tab = openTabsRef.current.find(t => t.instanceId === instanceId);
     if (tab && isViewOnlyProject(tab.projectId)) return false;
     const baseline = savedBaselinesRef.current.get(instanceId);
@@ -859,7 +910,7 @@ export const CanvasPage: React.FC = () => {
     const session = sessionsRef.current.get(instanceId);
     if (!session) return false;
     return !workspaceSnapshotsEqual(baseline, session.workspaceSnapshot);
-  }, [activeInstanceId, getLiveSnapshot, isViewOnlyProject]);
+  }, [activeInstanceId, getLiveSnapshot, isViewOnlyProject, collaborative]);
 
   const updateTabName = useCallback((projectId: number, name: string) => {
     setOpenTabs(prev => prev.map(t => (t.projectId === projectId ? { ...t, name } : t)));
@@ -1061,6 +1112,7 @@ export const CanvasPage: React.FC = () => {
   useEffect(() => () => clearStoredCanvasTabs(tabsStorageUserKey), [tabsStorageUserKey]);
 
   // A refresh or closing the page loses unsaved changes, so let the browser ask first.
+  // With collaboration nothing is unsaved (see isInstanceDirty); a lost connection is shown by the status banner.
   const hasUnsavedChanges = dirtyInstanceIds.size > 0;
   useEffect(() => {
     if (!hasUnsavedChanges) return;
@@ -1200,7 +1252,7 @@ export const CanvasPage: React.FC = () => {
 
   // Viewers: reload when the owner saves changes; detect when access is revoked.
   useEffect(() => {
-    if (!isViewOnly || !activeProjectId) return;
+    if (!isViewOnly || !activeProjectId || collaboration.sync !== null) return;
 
     const updatedAtMs = (value?: string | null): number | null => {
       if (!value) return null;
@@ -1249,7 +1301,7 @@ export const CanvasPage: React.FC = () => {
       globalThis.clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [isViewOnly, activeProjectId, activeInstanceId, loadVsum, navigate, showPopup]);
+  }, [isViewOnly, activeProjectId, activeInstanceId, loadVsum, navigate, showPopup, collaboration.sync]);
 
   // Switch tabs: capture leaving tab, restore or load active tab
   useEffect(() => {
@@ -1274,7 +1326,7 @@ export const CanvasPage: React.FC = () => {
       }
 
       const cached = sessionsRef.current.get(nextId);
-      if (cached && loadedTabsRef.current.has(nextId)) {
+      if (cached && loadedTabsRef.current.has(nextId) && !collaborative) {
         if (openTabsRef.current.some(t => t.instanceId === nextId)) bumpProjectRole();
         applyRef.current(cached);
         setProjectLoadState({ status: 'ready' });
@@ -1294,7 +1346,7 @@ export const CanvasPage: React.FC = () => {
 
     void run();
     return () => { cancelled = true; };
-  }, [activeInstanceId, clearCanvasWorkspace, loadVsum, bumpProjectRole, canvasModeRef, setConstraintsNodes, setMetricsEdges, setMetricsNodes, setMetricsViewTypes]);
+  }, [activeInstanceId, clearCanvasWorkspace, loadVsum, bumpProjectRole, canvasModeRef, setConstraintsNodes, setMetricsEdges, setMetricsNodes, setMetricsViewTypes, collaborative]);
 
   // ── Add model from drawer ─────────────────────────────────────────────────
 
@@ -1451,7 +1503,9 @@ export const CanvasPage: React.FC = () => {
         && detail.toLowerCase().includes('not found');
       if (missingReactionFile) {
         showPopup(
-          'Check build needs a reaction file between two models. This project has none, so the build stops. Use Save to store the canvas.',
+          collaborative
+            ? 'Check build needs a reaction file between two models. This project has none, so the build stops.'
+            : 'Check build needs a reaction file between two models. This project has none, so the build stops. Use Save to store the canvas.',
           'error',
         );
       } else {
@@ -1475,7 +1529,7 @@ export const CanvasPage: React.FC = () => {
     } finally {
       setCheckingBuild(false);
     }
-  }, [activeProjectId, dismissPopup, handleCanvasModeChange, isViewOnly, showPopup, showBuildFailure]);
+  }, [activeProjectId, dismissPopup, handleCanvasModeChange, isViewOnly, showPopup, showBuildFailure, collaborative]);
 
   // ── Downloads ─────────────────────────────────────────────────────────────
 
@@ -1550,7 +1604,7 @@ export const CanvasPage: React.FC = () => {
   // ── Save changes ──────────────────────────────────────────────────────────
 
   const handleSaveChanges = useCallback(async () => {
-    if (isViewOnly || !activeProjectId) return;
+    if (collaborative || isViewOnly || !activeProjectId) return;
     setSavingChanges(true);
     showPopup('Saving changes…', 'info');
     try {
@@ -1604,7 +1658,7 @@ export const CanvasPage: React.FC = () => {
     } finally {
       setSavingChanges(false);
     }
-  }, [activeProjectId, activeInstanceId, setBaselineForInstance, isViewOnly, showPopup, showPopupError]);
+  }, [activeProjectId, activeInstanceId, setBaselineForInstance, isViewOnly, showPopup, showPopupError, collaborative]);
 
   // Cmd/Ctrl+S saves the project instead of opening the browser's "Save Page As" dialog.
   // While an editor or dialog is open, the shortcut is left to it: the UML and reaction
@@ -1692,7 +1746,7 @@ export const CanvasPage: React.FC = () => {
       <div style={{
         width: '100%',
         height: '100%',
-        visibility: projectLoadState.status === 'ready' ? 'visible' : 'hidden',
+        visibility: shownLoadState.status === 'ready' ? 'visible' : 'hidden',
       }}>
 
       <FlowCanvas
@@ -1702,7 +1756,10 @@ export const CanvasPage: React.FC = () => {
         initialViewport={activeInstanceId ? sessionsRef.current.get(activeInstanceId)?.viewport : undefined}
         initialLocked={activeInstanceId ? sessionsRef.current.get(activeInstanceId)?.locked : undefined}
         vsumId={activeProjectId?.toString()}
-        readOnly={isViewOnly}
+        // Without the shared project there is nothing to save changes into.
+        readOnly={isViewOnly || collaboration.unavailable}
+        collaboration={collaboration.sync ?? undefined}
+        disableUndo={collaborative}
         canvasMode={canvasMode}
         onDiagramChange={handleDiagramChange}
         onEcoreFileExpand={handleEcoreFileExpand}
@@ -1715,7 +1772,7 @@ export const CanvasPage: React.FC = () => {
         constraintHighlightNodeId={constraintHighlightNodeId}
         constraintFilterNodeId={constraintFilterNodeId}
         onConstraintNodeFilter={setConstraintFilterNodeId}
-        onSaveChanges={handleSaveChanges}
+        onSaveChanges={collaborative ? undefined : handleSaveChanges}
         buildProblems={markedProblems}
         projectTabsBelowModeToggle={
           openTabs.length > 0 ? (
@@ -1803,6 +1860,7 @@ export const CanvasPage: React.FC = () => {
         onDownloadJar={handleDownloadJar}
         onDownloadBundle={handleDownloadBundle}
         onSaveChanges={handleSaveChanges}
+        collaborative={collaborative}
         onCheckBuild={handleCheckBuild}
         onUndo={() => flowCanvasRef.current?.undo?.()}
         onRedo={() => flowCanvasRef.current?.redo?.()}
@@ -1857,6 +1915,16 @@ export const CanvasPage: React.FC = () => {
         onCancel={handleCloseConfirmCancel}
       />
 
+      {collaborative && collaboration.connection && (collaboration.sync !== null || collaboration.unavailable) && (
+        <CollaborationStatus
+          status={collaboration.connection.status}
+          synced={collaboration.connection.synced}
+          writebackError={collaboration.connection.writebackError}
+          failure={collaboration.connection.failure}
+          unavailable={collaboration.unavailable}
+        />
+      )}
+
       <CanvasProjectAccessControls
         projectMembers={projectMembers}
         projectSharer={displayProjectSharer}
@@ -1883,9 +1951,9 @@ export const CanvasPage: React.FC = () => {
       </div>
       )}
 
-      {projectLoadState.status !== 'ready' && (
+      {shownLoadState.status !== 'ready' && (
         <CanvasProjectLoadStateOverlay
-          state={projectLoadState}
+          state={shownLoadState}
           projectId={activeProjectId}
           onBack={() => navigate('/')}
           onRetry={handleRetryProjectLoad}
