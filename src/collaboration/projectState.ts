@@ -77,8 +77,16 @@ export function hasChanges(changes: ProjectChanges): boolean {
  */
 export function readProjectState(doc: Y.Doc): ProjectState {
   const layout = doc.getMap(LAYOUT);
-  const positions = layout.get(LAYOUT_META_MODELS);
+  const models = readModels(doc, layout.get(LAYOUT_META_MODELS));
+  const reactions = layout.get(LAYOUT_REACTIONS);
+  return {
+    models,
+    relations: readRelations(doc, models),
+    reactionLayout: reactions instanceof Y.Map ? (reactions.toJSON() as Record<string, unknown>) : {},
+  };
+}
 
+function readModels(doc: Y.Doc, positions: unknown): Map<number, ModelState> {
   const models = new Map<number, ModelState>();
   for (const [key, element] of sortedEntries(doc.getMap(MODELS))) {
     const sourceId = parseModelKey(key);
@@ -92,31 +100,43 @@ export function readProjectState(doc: Y.Doc): ProjectState {
       position: positions instanceof Y.Map ? toPosition(positions.get(key)) : null,
     });
   }
+  return models;
+}
 
-  const candidates = new Map<string, (RelationState & { backendId: number | null })[]>();
+type RelationCandidate = RelationState & { backendId: number | null };
+
+/** The relation in an element of `relations`, or `null` if it isn't live or between live models. */
+function readRelation(key: string, element: unknown, models: Map<number, ModelState>): RelationCandidate | null {
+  if (!(element instanceof Y.Map) || isDeleted(element)) {
+    return null;
+  }
+  const sourceId = field<RelationFields>(element, 'sourceId');
+  const targetId = field<RelationFields>(element, 'targetId');
+  if (!isId(sourceId) || !isId(targetId) || !models.has(sourceId) || !models.has(targetId)) {
+    return null;
+  }
+  const reactionFileId = field<RelationFields>(element, 'reactionFileId');
+  const fineGranular = field<RelationFields>(element, 'fineGranular');
+  const backendId = field<RelationFields>(element, 'backendId');
+  return {
+    key,
+    sourceId,
+    targetId,
+    backendId: isId(backendId) ? backendId : null,
+    reactionFileId: isId(reactionFileId) ? reactionFileId : null,
+    fineGranular: Array.isArray(fineGranular) ? fineGranular.filter(isObject) : [],
+  };
+}
+
+function readRelations(doc: Y.Doc, models: Map<number, ModelState>): Map<string, RelationState> {
+  const candidates = new Map<string, RelationCandidate[]>();
   for (const [key, element] of sortedEntries(doc.getMap(RELATIONS))) {
-    if (!(element instanceof Y.Map) || isDeleted(element)) {
+    const relation = readRelation(key, element, models);
+    if (relation === null) {
       continue;
     }
-    const sourceId = field<RelationFields>(element, 'sourceId');
-    const targetId = field<RelationFields>(element, 'targetId');
-    if (!isId(sourceId) || !isId(targetId) || !models.has(sourceId) || !models.has(targetId)) {
-      continue;
-    }
-    const reactionFileId = field<RelationFields>(element, 'reactionFileId');
-    const fineGranular = field<RelationFields>(element, 'fineGranular');
-    const backendId = field<RelationFields>(element, 'backendId');
-    const pair = pairKey(sourceId, targetId);
-    const list = candidates.get(pair) ?? [];
-    list.push({
-      key,
-      sourceId,
-      targetId,
-      backendId: isId(backendId) ? backendId : null,
-      reactionFileId: isId(reactionFileId) ? reactionFileId : null,
-      fineGranular: Array.isArray(fineGranular) ? fineGranular.filter(isObject) : [],
-    });
-    candidates.set(pair, list);
+    const pair = pairKey(relation.sourceId, relation.targetId);
+    candidates.set(pair, [...(candidates.get(pair) ?? []), relation]);
   }
   const relations = new Map<string, RelationState>();
   for (const [pair, list] of candidates) {
@@ -129,13 +149,7 @@ export function readProjectState(doc: Y.Doc): ProjectState {
     const { backendId: _backendId, ...state } = chosen;
     relations.set(pair, state);
   }
-
-  const reactions = layout.get(LAYOUT_REACTIONS);
-  return {
-    models,
-    relations,
-    reactionLayout: reactions instanceof Y.Map ? (reactions.toJSON() as Record<string, unknown>) : {},
-  };
+  return relations;
 }
 
 /**
@@ -147,18 +161,21 @@ export function diffProjectState(
   next: ProjectState,
   { compareMappings = true }: { compareMappings?: boolean } = {},
 ): ProjectChanges {
-  const changes: ProjectChanges = {
-    addedModels: [],
-    removedModels: [],
-    renamedModels: [],
-    movedModels: [],
-    upsertedRelations: [],
-    removedRelations: [],
-    reactionLayout: undefined,
+  return {
+    ...diffModels(previous.models, next.models),
+    ...diffRelations(previous.relations, next.relations, compareMappings),
+    reactionLayout:
+      canonicalJson(previous.reactionLayout) === canonicalJson(next.reactionLayout) ? undefined : next.reactionLayout,
   };
+}
 
-  for (const model of next.models.values()) {
-    const before = previous.models.get(model.sourceId);
+function diffModels(
+  previous: Map<number, ModelState>,
+  next: Map<number, ModelState>,
+): Pick<ProjectChanges, 'addedModels' | 'removedModels' | 'renamedModels' | 'movedModels'> {
+  const changes: ReturnType<typeof diffModels> = { addedModels: [], removedModels: [], renamedModels: [], movedModels: [] };
+  for (const model of next.values()) {
+    const before = previous.get(model.sourceId);
     if (before === undefined) {
       changes.addedModels.push(model);
       continue;
@@ -170,32 +187,28 @@ export function diffProjectState(
       changes.movedModels.push({ sourceId: model.sourceId, position: model.position });
     }
   }
-  for (const sourceId of previous.models.keys()) {
-    if (!next.models.has(sourceId)) {
-      changes.removedModels.push(sourceId);
-    }
-  }
-
-  for (const [pair, relation] of next.relations) {
-    const before = previous.relations.get(pair);
-    if (
-      before === undefined ||
-      before.reactionFileId !== relation.reactionFileId ||
-      (compareMappings && canonicalJson(before.fineGranular) !== canonicalJson(relation.fineGranular))
-    ) {
-      changes.upsertedRelations.push(relation);
-    }
-  }
-  for (const [pair, relation] of previous.relations) {
-    if (!next.relations.has(pair)) {
-      changes.removedRelations.push({ sourceId: relation.sourceId, targetId: relation.targetId });
-    }
-  }
-
-  if (canonicalJson(previous.reactionLayout) !== canonicalJson(next.reactionLayout)) {
-    changes.reactionLayout = next.reactionLayout;
-  }
+  changes.removedModels = [...previous.keys()].filter((sourceId) => !next.has(sourceId));
   return changes;
+}
+
+function diffRelations(
+  previous: Map<string, RelationState>,
+  next: Map<string, RelationState>,
+  compareMappings: boolean,
+): Pick<ProjectChanges, 'upsertedRelations' | 'removedRelations'> {
+  const isChanged = (before: RelationState | undefined, relation: RelationState): boolean => {
+    if (before === undefined) {
+      return true;
+    }
+    const mappingsChanged = canonicalJson(before.fineGranular) !== canonicalJson(relation.fineGranular);
+    return before.reactionFileId !== relation.reactionFileId || (compareMappings && mappingsChanged);
+  };
+  return {
+    upsertedRelations: [...next].filter(([pair, relation]) => isChanged(previous.get(pair), relation)).map(([, relation]) => relation),
+    removedRelations: [...previous]
+      .filter(([pair]) => !next.has(pair))
+      .map(([, relation]) => ({ sourceId: relation.sourceId, targetId: relation.targetId })),
+  };
 }
 
 function isDeleted(element: Y.Map<unknown>): boolean {

@@ -1,7 +1,6 @@
-import type { Position } from './document';
 import type { CanvasPort } from './canvasSync';
 import { projectCanvasState } from './canvasProjection';
-import type { ProjectChanges, ProjectState } from './projectState';
+import type { ModelState, ProjectChanges, ProjectState } from './projectState';
 import {
   applyRelationToStore,
   removeRelationFromStore,
@@ -89,9 +88,9 @@ export function createCanvasPort(deps: CanvasPortDeps): CanvasPort {
         canvas.removeEcoreFileBySourceId(sourceId);
       }
 
-      for (const model of changes.addedModels) {
-        await addMetaModel(canvas, model.sourceId, model.name, model.position);
-      }
+      // The files load side by side; the boxes are added in the order of the changes.
+      const loaded = await Promise.all(changes.addedModels.map((model) => loadMetaModel(model.sourceId)));
+      changes.addedModels.forEach((model, index) => addMetaModel(canvas, model, loaded[index]));
 
       for (const { sourceId, name } of changes.renamedModels) {
         canvas.updateEcoreDisplayName(sourceId, name);
@@ -119,31 +118,32 @@ export function createCanvasPort(deps: CanvasPortDeps): CanvasPort {
     },
   };
 
-  async function addMetaModel(
-    canvas: CanvasHandle,
-    sourceId: number,
-    name: string,
-    position: Position | null,
-  ): Promise<void> {
-    let resolved: ResolvedMetaModel | null;
+  /** Loads a metamodel that another user added; `null` if that fails or it can't be found. */
+  async function loadMetaModel(sourceId: number): Promise<ResolvedMetaModel | null> {
     try {
-      resolved = await deps.resolveMetaModel(sourceId);
+      const resolved = await deps.resolveMetaModel(sourceId);
+      if (resolved === null) {
+        console.error(`The metamodel ${sourceId} that another user added was not found.`);
+      }
+      return resolved;
     } catch (error) {
       console.error(`Loading the metamodel ${sourceId} that another user added failed:`, error);
-      return;
+      return null;
     }
+  }
+
+  function addMetaModel(canvas: CanvasHandle, model: ModelState, resolved: ResolvedMetaModel | null): void {
     if (resolved === null) {
-      console.error(`The metamodel ${sourceId} that another user added was not found.`);
       return;
     }
     canvas.addEcoreFile(resolved.fileName, resolved.fileContent, {
       ...resolved.meta,
-      displayName: name,
+      displayName: model.name,
       // Not a change of this user: it must not be written into the project again.
       fromServerLoad: true,
       keepSelection: true,
-      position: position ?? undefined,
-      exactPosition: position !== null,
+      position: model.position ?? undefined,
+      exactPosition: model.position !== null,
     });
   }
 }

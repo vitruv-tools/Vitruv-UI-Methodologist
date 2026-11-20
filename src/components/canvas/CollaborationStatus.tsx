@@ -1,5 +1,6 @@
 import React from 'react';
 import type { ConnectionFailure, ConnectionStatus } from '../../collaboration/projectConnection';
+import type { CollaborationState } from '../../collaboration/useCanvasCollaboration';
 
 export interface CollaborationStatusProps {
   status: ConnectionStatus;
@@ -55,6 +56,24 @@ export const CollaborationStatus: React.FC<CollaborationStatusProps> = ({
   }
   return null;
 };
+
+/**
+ * What the banner shows for the state of the page's collaboration, or `null` if there is no
+ * banner: there is no collaboration, no connection yet, or the project is still being joined.
+ */
+export function collaborationStatusProps(collaboration: CollaborationState): CollaborationStatusProps | null {
+  const { enabled, connection, sync, unavailable } = collaboration;
+  if (!enabled || connection === null || (sync === null && !unavailable)) {
+    return null;
+  }
+  return {
+    status: connection.status,
+    synced: connection.synced,
+    writebackError: connection.writebackError,
+    failure: connection.failure,
+    unavailable,
+  };
+}
 
 function banner(tone: Tone, role: 'status' | 'alert', message: string): React.ReactElement {
   const { background, color, border } = TONES[tone];

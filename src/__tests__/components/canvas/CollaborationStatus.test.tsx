@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { CollaborationStatus } from '../../../components/canvas/CollaborationStatus';
+import { CollaborationStatus, collaborationStatusProps } from '../../../components/canvas/CollaborationStatus';
 
 const live = { status: 'connected' as const, synced: true, writebackError: null, failure: null, unavailable: false };
 
@@ -46,5 +46,21 @@ describe('CollaborationStatus', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('Connection lost');
     expect(screen.getByRole('status')).not.toHaveTextContent('could not be saved');
+  });
+});
+
+describe('collaborationStatusProps', () => {
+  const connection = { status: 'connected', synced: true, writebackError: null, failure: null } as never;
+  const state = (overrides: object) => ({ enabled: true, connection, sync: {}, holding: false, unavailable: false, ...overrides }) as never;
+
+  it('has nothing to show without collaboration, before there is a connection, or while joining', () => {
+    expect(collaborationStatusProps(state({ enabled: false }))).toBeNull();
+    expect(collaborationStatusProps(state({ connection: null }))).toBeNull();
+    expect(collaborationStatusProps(state({ sync: null }))).toBeNull();
+  });
+
+  it('describes the connection once the project is shown, or can not be joined', () => {
+    expect(collaborationStatusProps(state({}))).toEqual({ ...live, unavailable: false });
+    expect(collaborationStatusProps(state({ sync: null, unavailable: true }))).toEqual({ ...live, unavailable: true });
   });
 });

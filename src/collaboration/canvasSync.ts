@@ -76,8 +76,9 @@ export class CanvasSync {
 
   /** Resolves once the changes of other users that arrived are shown on the canvas. */
   async whenIdle(): Promise<void> {
-    while (this.pending > 0) {
+    if (this.pending > 0) {
       await this.queue;
+      await this.whenIdle();
     }
   }
 

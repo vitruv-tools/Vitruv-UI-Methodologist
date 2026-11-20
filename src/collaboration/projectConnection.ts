@@ -142,7 +142,7 @@ export function createProjectConnection(options: ProjectConnectionOptions): Proj
       return;
     }
     snapshot = next;
-    for (const listener of [...listeners]) {
+    for (const listener of listeners) {
       listener();
     }
   }

@@ -66,8 +66,10 @@ export async function waitForRelationInBackend(
   targetId: number,
   { timeoutMs = 15_000, intervalMs = 300 }: { timeoutMs?: number; intervalMs?: number } = {},
 ): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
+  const ask = async (deadline: number): Promise<boolean> => {
+    if (Date.now() >= deadline) {
+      return false;
+    }
     try {
       const response = await apiService.getVsumDetails(projectId);
       const relations: { sourceId: number; targetId: number }[] = response?.data?.metaModelsRelation ?? [];
@@ -78,8 +80,9 @@ export async function waitForRelationInBackend(
       // The backend may be busy; ask again until the time is up.
     }
     await new Promise((resolve) => globalThis.setTimeout(resolve, intervalMs));
-  }
-  return false;
+    return ask(deadline);
+  };
+  return ask(Date.now() + timeoutMs);
 }
 
 /** Resolves with the snapshot once the project is loaded into the document. */

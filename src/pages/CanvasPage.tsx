@@ -90,7 +90,8 @@ import {
 } from '../utils/workspaceSnapshotUtils';
 import { downloadBlobAsFile } from '../utils/downloadFile';
 import { syncVsumWorkspaceChanges } from '../utils/vsumSyncSave';
-import { CollaborationStatus } from '../components/canvas/CollaborationStatus';
+import { canvasCollaborationProps, shownLoadState } from '../collaboration/canvasCollaborationProps';
+import { CollaborationStatus, collaborationStatusProps } from '../components/canvas/CollaborationStatus';
 import { useCanvasCollaboration } from '../collaboration/useCanvasCollaboration';
 import type { ResolvedMetaModel } from '../collaboration/canvasPort';
 import {
@@ -571,9 +572,8 @@ export const CanvasPage: React.FC = () => {
     resolveMetaModel: resolveSharedMetaModel,
   });
   const collaborative = collaboration.enabled;
-  /** The canvas shows the project as loading until it shows the shared project too. */
-  const shownLoadState: CanvasProjectLoadState =
-    collaboration.holding && projectLoadState.status === 'ready' ? { status: 'hydrating' } : projectLoadState;
+  const collaborationStatus = collaborationStatusProps(collaboration);
+  const shownState = shownLoadState(collaboration, projectLoadState);
 
   const { problems: validationProblems, failure: validationFailure } = useVsumValidation(
     activeProjectId,
@@ -1731,6 +1731,7 @@ export const CanvasPage: React.FC = () => {
     if (activeProjectId) void loadVsum(activeProjectId, activeInstanceId ?? undefined);
   }, [activeProjectId, activeInstanceId, loadVsum]);
 
+  const canvasProps = canvasCollaborationProps(collaboration, isViewOnly, handleSaveChanges);
   const shouldRenderCanvasShell =
     projectLoadState.status === 'loading' ||
     projectLoadState.status === 'hydrating' ||
@@ -1746,7 +1747,7 @@ export const CanvasPage: React.FC = () => {
       <div style={{
         width: '100%',
         height: '100%',
-        visibility: shownLoadState.status === 'ready' ? 'visible' : 'hidden',
+        visibility: shownState.status === 'ready' ? 'visible' : 'hidden',
       }}>
 
       <FlowCanvas
@@ -1756,10 +1757,7 @@ export const CanvasPage: React.FC = () => {
         initialViewport={activeInstanceId ? sessionsRef.current.get(activeInstanceId)?.viewport : undefined}
         initialLocked={activeInstanceId ? sessionsRef.current.get(activeInstanceId)?.locked : undefined}
         vsumId={activeProjectId?.toString()}
-        // Without the shared project there is nothing to save changes into.
-        readOnly={isViewOnly || collaboration.unavailable}
-        collaboration={collaboration.sync ?? undefined}
-        disableUndo={collaborative}
+        {...canvasProps}
         canvasMode={canvasMode}
         onDiagramChange={handleDiagramChange}
         onEcoreFileExpand={handleEcoreFileExpand}
@@ -1772,7 +1770,6 @@ export const CanvasPage: React.FC = () => {
         constraintHighlightNodeId={constraintHighlightNodeId}
         constraintFilterNodeId={constraintFilterNodeId}
         onConstraintNodeFilter={setConstraintFilterNodeId}
-        onSaveChanges={collaborative ? undefined : handleSaveChanges}
         buildProblems={markedProblems}
         projectTabsBelowModeToggle={
           openTabs.length > 0 ? (
@@ -1915,15 +1912,7 @@ export const CanvasPage: React.FC = () => {
         onCancel={handleCloseConfirmCancel}
       />
 
-      {collaborative && collaboration.connection && (collaboration.sync !== null || collaboration.unavailable) && (
-        <CollaborationStatus
-          status={collaboration.connection.status}
-          synced={collaboration.connection.synced}
-          writebackError={collaboration.connection.writebackError}
-          failure={collaboration.connection.failure}
-          unavailable={collaboration.unavailable}
-        />
-      )}
+      {collaborationStatus && <CollaborationStatus {...collaborationStatus} />}
 
       <CanvasProjectAccessControls
         projectMembers={projectMembers}
@@ -1951,9 +1940,9 @@ export const CanvasPage: React.FC = () => {
       </div>
       )}
 
-      {shownLoadState.status !== 'ready' && (
+      {shownState.status !== 'ready' && (
         <CanvasProjectLoadStateOverlay
-          state={shownLoadState}
+          state={shownState}
           projectId={activeProjectId}
           onBack={() => navigate('/')}
           onRetry={handleRetryProjectLoad}

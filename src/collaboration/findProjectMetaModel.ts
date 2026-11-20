@@ -14,8 +14,7 @@ export async function findProjectMetaModel(
   sourceId: number,
   { timeoutMs = 20_000, intervalMs = 500 }: { timeoutMs?: number; intervalMs?: number } = {},
 ): Promise<VsumMetaModelRef | null> {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
+  const ask = async (deadline: number): Promise<VsumMetaModelRef | null> => {
     try {
       const response = await apiService.getVsumDetails(projectId);
       const found = (response?.data?.metaModels ?? []).find(
@@ -27,5 +26,7 @@ export async function findProjectMetaModel(
     }
     if (Date.now() >= deadline) return null;
     await new Promise((resolve) => globalThis.setTimeout(resolve, intervalMs));
-  }
+    return ask(deadline);
+  };
+  return ask(Date.now() + timeoutMs);
 }
