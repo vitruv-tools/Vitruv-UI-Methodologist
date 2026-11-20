@@ -72,7 +72,7 @@ export function readStoredTheme(): ThemeMode {
 export function applyDocumentTheme(theme: ThemeMode): void {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
-  root.setAttribute('data-theme', theme);
+  root.dataset.theme = theme;
   root.style.colorScheme = theme;
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) {

@@ -95,13 +95,9 @@ export async function syncVsumWorkspaceChanges(
   }
 
   const fallbackRelations = unlinkReactionFileIds(relations);
-  try {
-    const result = await attempt(fallbackRelations);
-    return {
-      message: `${result.message} (Missing reaction files were unlinked automatically.)`,
-      savedRelations: fallbackRelations,
-    };
-  } catch (retryError) {
-    throw retryError;
-  }
+  const result = await attempt(fallbackRelations);
+  return {
+    message: `${result.message} (Missing reaction files were unlinked automatically.)`,
+    savedRelations: fallbackRelations,
+  };
 }

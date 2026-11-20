@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { ViewTypeScope } from '../../../hooks/useViewTypes';
 import { Node } from 'reactflow';
@@ -27,6 +27,11 @@ export const ViewTypeContextMenu: React.FC<ViewTypeContextMenuProps> = ({
     x, y, ecoreNodes, onAdd, onClose,
 }) => {
     const [label, setLabel] = useState('');
+    const labelInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        labelInputRef.current?.focus();
+    }, []);
     const [scope, setScope] = useState<ViewTypeScope>('single');
     const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
     const [editable, setEditable] = useState(false);
@@ -84,7 +89,7 @@ export const ViewTypeContextMenu: React.FC<ViewTypeContextMenuProps> = ({
                 </div>
 
                 <input
-                    autoFocus
+                    ref={labelInputRef}
                     className="view-type-menu__input"
                     placeholder="Label (e.g. VT1)"
                     value={label}

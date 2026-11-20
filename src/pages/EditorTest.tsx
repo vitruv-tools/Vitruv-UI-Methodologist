@@ -8,7 +8,7 @@ export function EditorTest() {
       <CodeEditorModal
         isOpen={true}
         onClose={() => console.log('Close clicked')}
-        onSave={async (code) => {
+        onSave={(code) => {
           console.log('Save clicked:', code);
         }}
         onDelete={() => console.log('Delete clicked')}

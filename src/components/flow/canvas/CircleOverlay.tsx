@@ -237,6 +237,7 @@ export const CircleOverlay: React.FC<CircleOverlayProps> = ({
                 }}
                 pointerEvents="none"
             >
+                <title>Consistency circle</title>
                 <defs>
                     <filter id="circle-shadow" x="-20%" y="-20%" width="140%" height="140%">
                         <feDropShadow dx="0" dy="2" stdDeviation="5" floodColor="#000000" floodOpacity="0.2" />

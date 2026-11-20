@@ -37,7 +37,7 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
     return () => document.removeEventListener('keydown', handler);
   }, [isOpen, onClose]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true); setError(''); setSuccess('');
     try {

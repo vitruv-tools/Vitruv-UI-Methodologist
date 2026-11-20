@@ -60,12 +60,7 @@ export function findEcoreDownloadProblem(
   return null;
 }
 
-/** Reads a downloaded file as text (Blob.text() is missing in older browsers and jsdom). */
+/** Reads a downloaded file as text. */
 export function readBlobAsText(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
-    reader.onerror = () => reject(reader.error ?? new Error('Could not read the downloaded file.'));
-    reader.readAsText(blob);
-  });
+  return blob.text();
 }

@@ -186,7 +186,7 @@ export const CanvasMinimap: React.FC<CanvasMinimapProps> = ({
       boxShadow: 'var(--v-card-shadow)',
       overflow: 'hidden',
     }}>
-      <svg width={width} height={height} style={{ display: 'block' }}>
+      <svg width={width} height={height} aria-label="Canvas minimap" style={{ display: 'block' }}>
         {circle && renderCircleOverlay(circle, toX, toY, mmScale, width, height)}
 
         {edgeSegs.map(seg => renderEdgeSeg(seg, toX, toY))}
