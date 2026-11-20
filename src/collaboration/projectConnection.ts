@@ -102,7 +102,8 @@ class ProjectProvider extends WebsocketProvider {
       params.set(EPOCH_PARAM, epoch);
     }
     const query = params.toString();
-    return `${this.serverUrl}/${this.roomname}${query === '' ? '' : `?${query}`}`;
+    const suffix = query === '' ? '' : '?' + query;
+    return `${this.serverUrl}/${this.roomname}${suffix}`;
   }
 }
 

@@ -30,7 +30,10 @@ export function parseCollaborationUrl(value: string | undefined): string | undef
   if (protocol === undefined || url.host === '') {
     return invalid(trimmed);
   }
-  const path = url.pathname.replace(/\/+$/, '');
+  let path = url.pathname;
+  while (path.endsWith('/')) {
+    path = path.slice(0, -1);
+  }
   return `${protocol}//${url.host}${path}`;
 }
 

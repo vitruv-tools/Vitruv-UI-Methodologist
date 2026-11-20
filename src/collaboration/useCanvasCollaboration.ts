@@ -22,7 +22,7 @@ export interface UseCanvasCollaborationOptions {
   /** Finds a metamodel another user added and loads its ecore file. */
   resolveMetaModel: (sourceId: number) => Promise<ResolvedMetaModel | null>;
   /** The collaboration server's address. Defaults to `REACT_APP_COLLABORATION_URL`. */
-  serverUrl?: string | undefined;
+  serverUrl?: string;
   /** Defaults to the real connection; tests replace it. */
   createConnection?: typeof createProjectConnection;
   /** Defaults to {@link DEFAULT_UNAVAILABLE_AFTER_MS}. */

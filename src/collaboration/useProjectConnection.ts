@@ -9,7 +9,7 @@ import {
 
 export interface UseProjectConnectionOptions {
   /** The collaboration server's address. Defaults to `REACT_APP_COLLABORATION_URL`. */
-  serverUrl?: string | undefined;
+  serverUrl?: string;
   /** Defaults to {@link createProjectConnection}; tests replace it. */
   createConnection?: typeof createProjectConnection;
 }

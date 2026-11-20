@@ -236,7 +236,15 @@ function isSamePosition(a: Position | null, b: Position | null): boolean {
 }
 
 function sortedEntries(map: Y.Map<unknown>): [string, unknown][] {
-  return [...map.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return [...map.entries()].sort(([a], [b]) => compareStrings(a, b));
+}
+
+/** Orders strings by their code units, the same everywhere, unlike `localeCompare`. */
+function compareStrings(a: string, b: string): number {
+  if (a === b) {
+    return 0;
+  }
+  return a < b ? -1 : 1;
 }
 
 /** JSON text of a value that doesn't depend on the order of object keys. */
@@ -247,8 +255,9 @@ export function canonicalJson(value: unknown): string {
   if (isObject(value)) {
     const keys = Object.keys(value)
       .filter((key) => value[key] !== undefined)
-      .sort();
-    return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+      .sort(compareStrings);
+    const members = keys.map((key) => JSON.stringify(key) + ':' + canonicalJson(value[key]));
+    return '{' + members.join(',') + '}';
   }
   return JSON.stringify(value) ?? 'undefined';
 }
