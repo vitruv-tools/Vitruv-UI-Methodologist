@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { apiService } from '../../services/api';
+import config from '../../config/environment';
+import { addRelationToSharedProject, waitForRelationInBackend } from '../../collaboration/linkRelation';
 import { VsumMetaModelRef, VsumMetaModelRelation } from '../../types';
 import { toWireReactionFileId } from '../../utils/workspaceSnapshotUtils';
 import { displayMetaModelVersion } from '../../utils/metaModelVersion';
@@ -174,21 +176,35 @@ export const LinkMetaModelsPanel: React.FC<Props> = ({
         throw new TypeError('Reaction file upload did not return a valid file id.');
       }
 
-      // sync-changes expects catalog metamodel ids (the same ones the select options above use),
-      // not the VSUM-scoped clone ids in existingMetaModels[].id -- see the note on nameFor above.
-      const metaModelIds = Array.from(
-        new Set([...existingMetaModels.map((m) => m.sourceId), sourceId, targetId])
-      );
-      const metaModelRelationRequests = [
-        ...existingRelations.map((r) => ({
-          sourceId: r.sourceId,
-          targetId: r.targetId,
-          reactionFileId: toWireReactionFileId(r.reactionFileId ?? r.reactionFileStorageId),
-        })),
-        { sourceId, targetId, reactionFileId },
-      ];
+      if (config.collaborationUrl === undefined) {
+        // sync-changes expects catalog metamodel ids (the same ones the select options above use),
+        // not the VSUM-scoped clone ids in existingMetaModels[].id -- see the note on nameFor above.
+        const metaModelIds = Array.from(
+          new Set([...existingMetaModels.map((m) => m.sourceId), sourceId, targetId])
+        );
+        const metaModelRelationRequests = [
+          ...existingRelations.map((r) => ({
+            sourceId: r.sourceId,
+            targetId: r.targetId,
+            reactionFileId: toWireReactionFileId(r.reactionFileId ?? r.reactionFileStorageId),
+          })),
+          { sourceId, targetId, reactionFileId },
+        ];
 
-      await apiService.syncVsumChanges(vsumId, { metaModelIds, metaModelRelationRequests });
+        await apiService.syncVsumChanges(vsumId, { metaModelIds, metaModelRelationRequests });
+      } else {
+        // The project is shared live. Sending all of it to sync-changes, from what this panel knows,
+        // would delete what another user added meanwhile, so the relation goes into the shared
+        // project, which the collaboration server saves a moment later.
+        await addRelationToSharedProject({
+          serverUrl: config.collaborationUrl,
+          projectId: vsumId,
+          sourceId,
+          targetId,
+          reactionFileId,
+        });
+        await waitForRelationInBackend(vsumId, sourceId, targetId);
+      }
 
       resetForm();
       setShowForm(false);

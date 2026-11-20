@@ -97,6 +97,25 @@ import { applyAutoLayoutPositions, computeAutoLayoutPositions } from './flowCanv
 import { enterReactionMode, exitReactionMode } from './flowCanvasReactionMode';
 import { buildEdgeDistributionMap } from './flowCanvasEdgeDistribution';
 import { buildReactionEdge } from './flowCanvasEdgeFactory';
+import {
+  allowedOrIgnored,
+  allowedOrNothing,
+  collaborationFlowProps,
+  connectionRadiusFor,
+  containerSize,
+  interactionFlags,
+  panOnDragFor,
+  zoomLimits,
+} from './flowCanvasRenderProps';
+import type { Position as SharedPosition } from '../../collaboration/document';
+import type { CanvasCollaboration } from '../../collaboration/canvasSync';
+import {
+  metaModelDocumentId,
+  moveMetaModelBoxes,
+  removeMetaModelFromCanvas,
+  removeReactionEdge,
+  upsertReactionEdge,
+} from './flowCanvasCollaboration';
 import { computeParallelEdgeReorder } from './flowCanvasEdgeReorder';
 import {
   indexFineReactionParallels,
@@ -178,6 +197,7 @@ import {
 } from '../../utils/expandMetaModel';
 import {
   applyReactionLayout,
+  captureReactionLayout,
   loadReactionLayout,
   persistReactionLayoutFromNodes,
 } from '../../utils/reactionLayoutStorage';
@@ -198,7 +218,13 @@ import BoundingBoxNode from './lowcode/BoundingBoxNode';
  * default 28px radius made the line leap between neighbouring handles; this keeps it on the one
  * under the cursor (the handles' hit areas are widened in reaction.css to compensate).
  */
-const REACTION_CONNECTION_RADIUS = 10;
+
+/** How long the canvas must be still before the user's changes are written into the shared project. */
+const COLLABORATION_PUSH_DELAY_MS = 200;
+/** While a box is dragged, its position is written at this interval, so that others see it move. */
+const COLLABORATION_DRAG_PUSH_MS = 16;
+/** Fine-granular mappings are written at the latest this long after the user saved or deleted one. */
+const COLLABORATION_MAPPINGS_FALLBACK_MS = 300;
 
 export type { CanvasMode } from './flowCanvasTypes';
 
@@ -256,6 +282,18 @@ export interface FlowCanvasHandle {
    */
   openViewTypeFileAt: (fileStorageId: number, position?: { lineNumber: number; column?: number }) => boolean;
   establishBaseline: () => void;
+  /** Removes the box of a metamodel, with its relations, because another user deleted it. */
+  removeEcoreFileBySourceId: (sourceId: number) => void;
+  /** Moves metamodel boxes, keyed by library ID, because other users moved them. */
+  setEcorePositions: (positions: ReadonlyMap<number, SharedPosition>) => void;
+  /** Shows a relation that another user added or changed. */
+  upsertReactionRelation: (relation: {
+    sourceId: number;
+    targetId: number;
+    reactionFileId: number | null;
+  }) => void;
+  /** Removes a relation that another user deleted. */
+  removeReactionRelation: (sourceId: number, targetId: number) => void;
 }
 
 interface FlowCanvasProps {
@@ -300,6 +338,17 @@ interface FlowCanvasProps {
   buildProblems?: readonly BuildProblem[];
   /** When true, canvas is view-only (no edits, drag, connect, or delete). */
   readOnly?: boolean;
+  /**
+   * The project's live collaboration. With it, what the user changes is written into the shared
+   * project (there is no Save), and the user's deletions are announced to it. Without it, the canvas
+   * works on its own.
+   */
+  collaboration?: CanvasCollaboration;
+  /**
+   * Turns undo and redo off. The canvas keeps snapshots of itself, so with collaboration an undo
+   * would also undo and bring back what other users did.
+   */
+  disableUndo?: boolean;
 }
 
 function keywordsFromEcoreNodeData(data: { keywords?: unknown } | undefined): string[] {
@@ -311,6 +360,45 @@ function keywordsFromEcoreNodeData(data: { keywords?: unknown } | undefined): st
     return raw.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
   }
   return [];
+}
+
+function numberOrUndefined(value: unknown): number | undefined {
+  return typeof value === 'number' ? value : undefined;
+}
+
+/** What a metamodel box shows about its metamodel, from the options `addEcoreFile` is given. */
+function ecoreNodeDataFromMeta(fileName: string, fileContent: string, nsUri: string | null, meta: any) {
+  return {
+    fileName,
+    displayName: meta?.displayName ?? fileName.replace(/\.ecore$/i, ''),
+    version: typeof meta?.version === 'string' ? meta.version : undefined,
+    fileContent,
+    nsUri,
+    description: meta?.description,
+    keywords: meta?.keywords,
+    domain: meta?.domain,
+    createdAt: meta?.createdAt || new Date().toISOString(),
+    ecoreFileId: numberOrUndefined(meta?.ecoreFileId),
+    genModelFileId: numberOrUndefined(meta?.genModelFileId),
+  };
+}
+
+/** Library IDs of the metamodels a confirmed deletion removes from the canvas. */
+function deletedMetaModelIds(pending: PendingDeleteState, nodes: Node[]): number[] {
+  return [pending.fileId, ...pending.nodeIds]
+    .map(id => nodes.find(n => n.id === id))
+    .filter((node): node is Node => node?.type === 'ecoreFile')
+    .map(metaModelDocumentId)
+    .filter((sourceId): sourceId is number => sourceId !== undefined);
+}
+
+/** Library IDs of the two metamodels a reaction edge connects, if both are on the canvas. */
+function relationEnds(edge: Edge, nodes: Node[]): { sourceId: number; targetId: number } | undefined {
+  const source = nodes.find(n => n.id === edge.source);
+  const target = nodes.find(n => n.id === edge.target);
+  const sourceId = source && metaModelDocumentId(source);
+  const targetId = target && metaModelDocumentId(target);
+  return sourceId !== undefined && targetId !== undefined ? { sourceId, targetId } : undefined;
 }
 
 function persistEcoreFileRename(node: Node | undefined, newFileName: string): void {
@@ -364,6 +452,8 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       onSaveChanges,
       buildProblems,
       readOnly = false,
+      collaboration,
+      disableUndo = false,
     },
     ref,
   ) {
@@ -450,25 +540,108 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       setEdges,
       undo: undoFlow,
       redo: redoFlow,
-      canUndo,
-      canRedo,
+      canUndo: flowCanUndo,
+      canRedo: flowCanRedo,
       updateEdgeCode,
       setHistoryPaused,
       establishBaseline,
     } = useFlowState();
 
+    const canUndo = flowCanUndo && !disableUndo;
+    const canRedo = flowCanRedo && !disableUndo;
+
     const undo = useCallback(() => {
+      if (disableUndo) return;
       const restored = undoFlow();
       if (restored) syncFineGranularStoreFromCanvas(restored.nodes, restored.edges);
-    }, [undoFlow]);
+    }, [undoFlow, disableUndo]);
 
     const redo = useCallback(() => {
+      if (disableUndo) return;
       const restored = redoFlow();
       if (restored) syncFineGranularStoreFromCanvas(restored.nodes, restored.edges);
-    }, [redoFlow]);
+    }, [redoFlow, disableUndo]);
 
     const nodesRef = useRef(nodes);
     nodesRef.current = nodes;
+    const edgesRef = useRef(edges);
+    edgesRef.current = edges;
+
+    // ── Collaboration ─────────────────────────────────────────────────────────
+
+    const collaborationRef = useRef(collaboration);
+    collaborationRef.current = collaboration;
+    const writesToProject = collaboration !== undefined && !readOnly;
+
+    // What the shared project cares about on the canvas. The user's changes are written when this
+    // changes and the canvas has been still for a moment, e.g. when a drag has ended.
+    const sharedStateKey = useMemo(() => {
+      if (!writesToProject) return '';
+      return JSON.stringify([
+        nodes
+          .filter(n => n.type === 'ecoreFile')
+          .map(n => [n.id, metaModelDocumentId(n), n.data?.displayName, n.data?.fileName, n.position.x, n.position.y, Boolean(n.dragging)]),
+        edges
+          .filter(e => e.type === 'reactions')
+          .map(e => [e.source, e.target, e.data?.reactionFileId ?? null]),
+      ]);
+    }, [writesToProject, nodes, edges]);
+
+    const lastPushRef = useRef(0);
+    const boxDragged = useMemo(
+      () => writesToProject && nodes.some(n => n.type === 'ecoreFile' && n.dragging),
+      [writesToProject, nodes],
+    );
+    useEffect(() => {
+      if (!writesToProject) return undefined;
+      // Waiting for the canvas to be still would show nothing until a box is let go. While one is
+      // dragged, the position is written at short intervals instead.
+      const wait = boxDragged
+        ? Math.max(0, COLLABORATION_DRAG_PUSH_MS - (Date.now() - lastPushRef.current))
+        : COLLABORATION_PUSH_DELAY_MS;
+      const timer = globalThis.setTimeout(() => {
+        lastPushRef.current = Date.now();
+        collaborationRef.current?.pushLocalChanges();
+      }, wait);
+      return () => globalThis.clearTimeout(timer);
+    }, [writesToProject, sharedStateKey, collaboration, boxDragged]);
+
+    // Mappings are written when the user saved or deleted one, not on every change of the canvas.
+    const mappingsChangedRef = useRef(false);
+    const flushMappings = useCallback(() => {
+      if (!mappingsChangedRef.current) return;
+      mappingsChangedRef.current = false;
+      collaborationRef.current?.pushMappings();
+    }, []);
+    /** The user changed fine-granular mappings: they are written once the canvas shows the change. */
+    const requestMappingsPush = useCallback(() => {
+      if (!collaborationRef.current || readOnly) return;
+      mappingsChangedRef.current = true;
+      // Also without a change of the canvas, e.g. when only the Low Code store changed.
+      globalThis.setTimeout(flushMappings, COLLABORATION_MAPPINGS_FALLBACK_MS);
+    }, [readOnly, flushMappings]);
+    useEffect(() => {
+      flushMappings();
+    }, [edges, flushMappings]);
+
+    /**
+     * The user confirmed deleting these from the canvas. The shared project is told explicitly:
+     * a canvas that merely lacks something, e.g. because another project is loaded, deletes nothing.
+     */
+    const announceDeletion = useCallback((pending: PendingDeleteState) => {
+      const project = collaborationRef.current;
+      if (!project || readOnly) return;
+      const currentNodes = nodesRef.current;
+      deletedMetaModelIds(pending, currentNodes).forEach(sourceId => project.removeModel(sourceId));
+      const deletedEdges = pending.edgeIds
+        .map(id => edgesRef.current.find(e => e.id === id))
+        .filter((edge): edge is Edge => edge !== undefined);
+      if (deletedEdges.some(edge => edge.type === 'fine-granular-reaction')) requestMappingsPush();
+      for (const edge of deletedEdges) {
+        const ends = edge.type === 'reactions' ? relationEnds(edge, currentNodes) : undefined;
+        if (ends) project.removeRelation(ends.sourceId, ends.targetId);
+      }
+    }, [readOnly, requestMappingsPush]);
 
     const [circle, setCircle] = useCircleContainment(nodes);
     const syncBaseRef = useRef<() => ViewSyncBase>(() => ({ metaModelIds: [], metaModelRelationRequests: null }));
@@ -605,6 +778,33 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       return changes.filter(c => !selectChanges.includes(c));
     }, []);
 
+    /** Keeps the history paused while a box is dragged. Returns whether a drag ended with these changes. */
+    const trackNodeDrag = useCallback((changes: any[]): boolean => {
+      const { isDragging, dragEnded } = getNodeDragFlags(changes);
+      if (isDragging) {
+        setHistoryPaused(true);
+        if (!nodeDraggingRef.current) setIsNodeDragging(true);
+        nodeDraggingRef.current = true;
+      }
+      if (dragEnded) {
+        setHistoryPaused(false);
+        nodeDraggingRef.current = false;
+        setIsNodeDragging(false);
+      }
+      return dragEnded;
+    }, [setHistoryPaused]);
+
+    /** Remembers where the boxes are after a drag, and tells the project the reaction layout. */
+    const persistLayoutAfterDrag = useCallback((nextNodes: Node[]) => {
+      const projectId = useProjectStore.getState().activeId;
+      if (!addReactionMode) {
+        persistVsumLayoutFromNodes(projectId, nextNodes);
+        return;
+      }
+      persistReactionLayoutFromNodes(projectId, nextNodes);
+      if (!readOnly) collaborationRef.current?.pushReactionLayout(captureReactionLayout(nextNodes));
+    }, [addReactionMode, readOnly]);
+
     const onNodesChange = useCallback((allChanges: any) => {
       const changes = takeModelSelectChanges(allChanges);
       if (changes.length === 0) return;
@@ -619,17 +819,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         nodes: liveNodes,
       });
 
-      const { isDragging, dragEnded } = getNodeDragFlags(clampedChanges);
-      if (isDragging) {
-        setHistoryPaused(true);
-        if (!nodeDraggingRef.current) setIsNodeDragging(true);
-        nodeDraggingRef.current = true;
-      }
-      if (dragEnded) {
-        setHistoryPaused(false);
-        nodeDraggingRef.current = false;
-        setIsNodeDragging(false);
-      }
+      const dragEnded = trackNodeDrag(clampedChanges);
 
       const draggingIds = bboxDraggingIdsRef.current;
       syncBboxDraggingIds(clampedChanges, draggingIds);
@@ -655,14 +845,9 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         liveNodes,
         [...clampedChanges, ...extraChanges],
       );
-      const projectId = useProjectStore.getState().activeId;
-      if (addReactionMode) {
-        persistReactionLayoutFromNodes(projectId, nextNodes);
-      } else {
-        persistVsumLayoutFromNodes(projectId, nextNodes);
-      }
+      persistLayoutAfterDrag(nextNodes);
       if (umlModalOpen) setEdges(clearUmlCustomControlPoints);
-    }, [originalOnNodesChange, recalculateEdgeHandles, circle, circleVisible, umlModalOpen, detailModel, setEdges, setHistoryPaused, readOnly, locked, edges, addReactionMode, takeModelSelectChanges]);
+    }, [originalOnNodesChange, recalculateEdgeHandles, circle, circleVisible, umlModalOpen, detailModel, setEdges, readOnly, locked, edges, takeModelSelectChanges, trackNodeDrag, persistLayoutAfterDrag]);
 
     const guardedOnEdgesChange = useCallback((allChanges: any) => {
       const changes = boxSelectionRef.current
@@ -1071,10 +1256,11 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
 
     const handleDeleteEdge = useCallback(() => {
       if (codeEditorState?.edgeId) {
+        announceDeletion({ nodeIds: [], edgeIds: [codeEditorState.edgeId], fileId: null });
         removeEdge(codeEditorState.edgeId);
         setCodeEditorState(null);
       }
-    }, [codeEditorState, removeEdge]);
+    }, [codeEditorState, removeEdge, announceDeletion]);
 
     // ── Imperative surface ────────────────────────────────────────────────────
 
@@ -1553,10 +1739,8 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       if (!editable && !meta?.fromServerLoad) return;
 
       const ecoreNodes = nodesRef.current.filter(n => n.type === 'ecoreFile');
-      const metaModelId = typeof meta?.metaModelId === 'number' ? meta.metaModelId : undefined;
-      const metaModelSourceId = typeof meta?.metaModelSourceId === 'number'
-        ? meta.metaModelSourceId
-        : metaModelId;
+      const metaModelId = numberOrUndefined(meta?.metaModelId);
+      const metaModelSourceId = numberOrUndefined(meta?.metaModelSourceId) ?? metaModelId;
 
       const alreadyOnCanvas = isMetaModelRowOnCanvas(ecoreNodes, metaModelId);
       if (alreadyOnCanvas) return;
@@ -1570,32 +1754,22 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         nsUri: nsUri ?? undefined,
         fileName,
       };
-      const savedPosition = loadVsumLayoutPosition(
-        useProjectStore.getState().activeId,
-        layoutIdentity,
-      );
+      // A box another user placed goes exactly where they put it, whatever else is there.
+      const exactPosition = meta?.exactPosition === true ? meta.position : undefined;
+      const savedPosition = exactPosition
+        ? undefined
+        : loadVsumLayoutPosition(useProjectStore.getState().activeId, layoutIdentity);
 
       const newEcoreNode: Node = {
         id: nodeId,
         type: 'ecoreFile',
-        position: findFreeEcorePosition(
-          ecoreNodes,
-          savedPosition ?? meta?.position ?? { x: 60, y: 60 },
-        ),
+        position: exactPosition
+          ? { x: exactPosition.x, y: exactPosition.y }
+          : findFreeEcorePosition(ecoreNodes, savedPosition ?? meta?.position ?? { x: 60, y: 60 }),
         data: {
-          fileName,
-          displayName: meta?.displayName ?? fileName.replace(/\.ecore$/i, ''),
-          version: typeof meta?.version === 'string' ? meta.version : undefined,
-          fileContent,
-          nsUri,
-          description: meta?.description,
-          keywords: meta?.keywords,
-          domain: meta?.domain,
-          createdAt: meta?.createdAt || new Date().toISOString(),
+          ...ecoreNodeDataFromMeta(fileName, fileContent, nsUri, meta),
           metaModelId,
           metaModelSourceId,
-          ecoreFileId: typeof meta?.ecoreFileId === 'number' ? meta.ecoreFileId : undefined,
-          genModelFileId: typeof meta?.genModelFileId === 'number' ? meta.genModelFileId : undefined,
           onExpand: handleEcoreFileExpand,
           onSelect: handleEcoreFileSelect,
           onDelete: onEcoreFileDelete,
@@ -1613,8 +1787,11 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         layoutIdentity,
         newEcoreNode.position,
       );
-      selectOnlyFile(newEcoreNode.id);
-      onEcoreFileSelect?.(fileName);
+      // A box that arrives from another user doesn't take over the selection of this one.
+      if (!meta?.keepSelection) {
+        selectOnlyFile(newEcoreNode.id);
+        onEcoreFileSelect?.(fileName);
+      }
 
       // If in reaction mode, immediately expand into eobject + boundingBox nodes
       if (addReactionMode && fileContent) {
@@ -1765,6 +1942,50 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
 
     // ── Imperative handle ─────────────────────────────────────────────────────
 
+    // ── Changes of other users ────────────────────────────────────────────────
+
+    const removeEcoreFileBySourceId = useCallback((sourceId: number) => {
+      const before = nodesRef.current;
+      const { nodes: remaining } = removeMetaModelFromCanvas(before, edgesRef.current, sourceId);
+      if (remaining === before) return;
+      const kept = new Set(remaining.map(n => n.id));
+      const removed = new Set(before.filter(n => !kept.has(n.id)).map(n => n.id));
+      setNodes(current => current.filter(n => !removed.has(n.id)));
+      setEdges(current => current.filter(e => !removed.has(e.source) && !removed.has(e.target)));
+      setSelectedFileIds(ids => ids.filter(id => !removed.has(id)));
+      setExpandedFileId(id => (id !== null && removed.has(id) ? null : id));
+      globalThis.setTimeout(() => recalculateEdgeHandles(), 0);
+    }, [setNodes, setEdges, recalculateEdgeHandles]);
+
+    const setEcorePositions = useCallback((positions: ReadonlyMap<number, SharedPosition>) => {
+      setNodes(current => moveMetaModelBoxes(current, positions));
+      globalThis.setTimeout(() => recalculateEdgeHandles(), 100);
+    }, [setNodes, recalculateEdgeHandles]);
+
+    const upsertReactionRelation = useCallback((relation: {
+      sourceId: number;
+      targetId: number;
+      reactionFileId: number | null;
+    }) => {
+      setEdges(current => upsertReactionEdge(
+        nodesRef.current,
+        current,
+        relation,
+        (sourceNode, targetNode, data) => buildReactionEdge({
+          id: `edge-${sourceNode.id}-${targetNode.id}-${Date.now()}`,
+          sourceNode,
+          targetNode,
+          color: getColorForPair(sourceNode.id, targetNode.id),
+          data: { code: '', ...data },
+        }),
+      ));
+      globalThis.setTimeout(() => recalculateEdgeHandles(), 0);
+    }, [setEdges, getColorForPair, recalculateEdgeHandles]);
+
+    const removeReactionRelation = useCallback((sourceId: number, targetId: number) => {
+      setEdges(current => removeReactionEdge(nodesRef.current, current, sourceId, targetId));
+    }, [setEdges]);
+
     useImperativeHandle(ref, () => ({
       handleToolClick,
       loadDiagramData,
@@ -1797,7 +2018,11 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       openMetaModelFile,
       openViewTypeFileAt,
       establishBaseline,
-    }), [openViewTypeFileAt, handleToolClick, loadDiagramData, nodes, edges, viewTypes, addEcoreFile, updateEcoreDisplayName, updateEcoreFileData, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, getWorkspaceSnapshot, autoLayoutEcoreBoxes, fitUmlView, openSelectedReactionEditor, openReactionFileAt, openMetaModelFile, establishBaseline, locked]);
+      removeEcoreFileBySourceId,
+      setEcorePositions,
+      upsertReactionRelation,
+      removeReactionRelation,
+    }), [removeEcoreFileBySourceId, setEcorePositions, upsertReactionRelation, removeReactionRelation, openViewTypeFileAt, handleToolClick, loadDiagramData, nodes, edges, viewTypes, addEcoreFile, updateEcoreDisplayName, updateEcoreFileData, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, getWorkspaceSnapshot, autoLayoutEcoreBoxes, fitUmlView, openSelectedReactionEditor, openReactionFileAt, openMetaModelFile, establishBaseline, locked]);
 
     // ── Render mapping ────────────────────────────────────────────────────────
 
@@ -1982,10 +2207,15 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       return flowToScreenPoints(flowPoints, reactFlowInstance.getViewport());
     }, [connectionLinePositions, connectionDragState, nodes, reactFlowInstance, reactionRoutes]);
     const umlViewActive = !!umlModalOpen;
-    const interactionsAllowed = umlViewActive || readOnly || isInteractive;
-    // Viewers can reposition nodes to read a large model; they still cannot
-    // create, delete, connect, rename, or save anything.
-    const nodesMovable = umlViewActive || readOnly || (editable && !connectionDragState?.isActive);
+    const { interactionsAllowed, nodesMovable } = interactionFlags({
+      umlViewActive,
+      readOnly,
+      isInteractive,
+      editable,
+      connecting: !!connectionDragState?.isActive,
+    });
+    const { minZoom, maxZoom } = zoomLimits(umlViewActive);
+    const minimapSize = containerSize(reactFlowWrapper.current);
 
     const handleSelectCanvasMode = useCallback((mode: CanvasMode) => {
       setActiveCanvasMode(mode);
@@ -2010,10 +2240,11 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           nodes={mappedNodes}
           edges={mappedEdges}
           onNodesChange={onNodesChange}
+          {...collaborationFlowProps(collaboration)}
           onEdgesChange={guardedOnEdgesChange}
           onConnect={guardedOnConnect}
           connectionMode={ConnectionMode.Loose}
-          connectionRadius={addReactionMode ? REACTION_CONNECTION_RADIUS : 28}
+          connectionRadius={connectionRadiusFor(addReactionMode)}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -2031,7 +2262,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           edgesUpdatable={false}
           edgesFocusable={interactionsAllowed}
           // With the selection box, left-drag selects; the middle button and two-finger scroll pan.
-          panOnDrag={boxSelectionEnabled ? [1] : interactionsAllowed}
+          panOnDrag={panOnDragFor(boxSelectionEnabled, interactionsAllowed)}
           selectionOnDrag={boxSelectionEnabled}
           selectionMode={SelectionMode.Partial}
           onSelectionStart={handleSelectionStart}
@@ -2040,8 +2271,8 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           zoomOnScroll={interactionsAllowed}
           zoomOnPinch={interactionsAllowed}
           zoomOnDoubleClick={interactionsAllowed}
-          minZoom={umlViewActive ? 0.45 : 0.05}
-          maxZoom={umlViewActive ? 2.5 : 2}
+          minZoom={minZoom}
+          maxZoom={maxZoom}
           translateExtent={[[-12000, -12000], [12000, 12000]]}
           selectNodesOnDrag={false}
           proOptions={{ hideAttribution: true }}
@@ -2076,10 +2307,10 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
             viewTypes={linkedViewTypes}
             ecoreNodes={ecoreNodes}
             onAddViewType={handleAddViewType}
-            onDeleteViewType={editable ? deleteViewType : () => {}}
+            onDeleteViewType={allowedOrIgnored(editable, deleteViewType)}
             onEditViewQuery={handleEditViewQuery}
-            onUpdateViewTypeAngle={editable ? updateAngle : () => {}}
-            onUnlinkNode={editable ? unlinkNode : () => {}}
+            onUpdateViewTypeAngle={allowedOrIgnored(editable, updateAngle)}
+            onUnlinkNode={allowedOrIgnored(editable, unlinkNode)}
             onEditViewType={(id) => { void openViewTypeEditor(id); }}
             viewProblemCounts={viewProblemCounts}
           />
@@ -2099,8 +2330,8 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           reactionRoutes={reactionRoutes}
           circle={circleVisible ? circle : undefined}
           viewport={viewport}
-          containerW={reactFlowWrapper.current?.clientWidth ?? 800}
-          containerH={reactFlowWrapper.current?.clientHeight ?? 600}
+          containerW={minimapSize.width}
+          containerH={minimapSize.height}
           width={200}
           height={204}
         />
@@ -2151,7 +2382,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         <NeoJoinEditorModal
           state={neoJoinEditor}
           onClose={() => setNeoJoinEditor(null)}
-          onSave={readOnly ? async () => {} : handleSaveNeoJoin}
+          onSave={allowedOrIgnored(!readOnly, handleSaveNeoJoin)}
           vsumId={vsumId}
           readOnly={readOnly}
         />
@@ -2160,8 +2391,8 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           <ReactionEditorModal
             state={codeEditorState}
             onClose={handleCloseCodeEditor}
-            onSave={readOnly ? async () => {} : handleSaveCode}
-            onDelete={editable ? handleDeleteEdge : undefined}
+            onSave={allowedOrIgnored(!readOnly, handleSaveCode)}
+            onDelete={allowedOrNothing(editable, handleDeleteEdge)}
             vsumId={vsumId}
             readOnly={readOnly}
           />
@@ -2177,6 +2408,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           onCancel={() => setPendingDelete(null)}
           onConfirm={() => {
             if (!pendingDelete) return;
+            announceDeletion(pendingDelete);
             applyPendingCanvasDelete(
               pendingDelete,
               removeEdge,
@@ -2216,9 +2448,12 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
               onDirtyChange={setLowCodeEditorDirty}
               onSaveComplete={() => {
                 setLowCodeEditorDirty(false);
-                if (!readOnly) onSaveChanges?.();
+                if (readOnly) return;
+                // With collaboration, saving means writing into the shared project.
+                if (collaborationRef.current) requestMappingsPush();
+                else onSaveChanges?.();
               }}
-              onDeleteRequest={editable ? () => setConfirmDeleteOpen(true) : undefined}
+              onDeleteRequest={allowedOrNothing(editable, () => setConfirmDeleteOpen(true))}
             />
           </DragablePanel>
         )}
@@ -2235,6 +2470,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           onConfirm={() => {
             setConfirmDeleteOpen(false);
             if (!confirmDeleteFineGranularReaction(selectedEdge, edges, removeEdge)) return;
+            requestMappingsPush();
             setLowCodeEditorOpen(false);
             setLowCodeEditorDirty(false);
             useSelectedEdgeStore.getState().clearSelectedEdge();

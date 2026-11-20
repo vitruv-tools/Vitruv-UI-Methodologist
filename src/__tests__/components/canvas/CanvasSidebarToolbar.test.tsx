@@ -69,6 +69,24 @@ describe('CanvasSidebarToolbar', () => {
     expect(props.onToggleModelDrawer).toHaveBeenCalledTimes(1);
   });
 
+  it('has no Save and no Undo or Redo when changes are saved automatically through collaboration', () => {
+    render(<CanvasSidebarToolbar {...createProps()} collaborative />);
+
+    expect(screen.getAllByRole('button').map(button => button.getAttribute('aria-label'))).toEqual([
+      labels.select,
+      labels.download,
+      labels.checkBuild,
+      labels.addMetaModels,
+    ]);
+  });
+
+  it('keeps Save, Undo and Redo without collaboration', () => {
+    render(<CanvasSidebarToolbar {...createProps()} collaborative={false} />);
+
+    expect(screen.getByRole('button', { name: labels.save })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: labels.undoAvailable })).toBeInTheDocument();
+  });
+
   it('renders only permitted read-only controls', () => {
     const props = createProps();
     render(<CanvasSidebarToolbar {...props} readOnly />);

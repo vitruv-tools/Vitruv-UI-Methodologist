@@ -200,6 +200,12 @@ describe('renameEcoreFileNode', () => {
     expect(renameEcoreFileNode(nodes, 'ecore-1', 'New Name.ecore')[0].data.fileName).toBe('New Name.ecore');
   });
 
+  it('changes the title the box shows, which a display name would otherwise keep as it was', () => {
+    const named = [{ id: 'ecore-1', type: 'ecoreFile', position: { x: 0, y: 0 }, data: { fileName: 'Old.ecore', displayName: 'Old' } }] as Node[];
+
+    expect(renameEcoreFileNode(named, 'ecore-1', 'New Name')[0].data.displayName).toBe('New Name');
+  });
+
   it('leaves nodes unchanged for a blank name or a missing id', () => {
     expect(renameEcoreFileNode(nodes, 'ecore-1', '   ')).toBe(nodes);
     expect(renameEcoreFileNode(nodes, 'missing', 'New')[1].data.label).toBe('Class');

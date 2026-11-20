@@ -5,6 +5,18 @@ import { LinkMetaModelsPanel } from '../../../components/ui/LinkMetaModelsPanel'
 import { VsumMetaModelRef, VsumMetaModelRelation } from '../../../types';
 import * as apiModule from '../../../services/api';
 
+// The collaboration server is configured only in the tests that say so.
+const settings = vi.hoisted(() => ({ collaborationUrl: undefined as string | undefined }));
+vi.mock('../../../config/environment', () => ({
+  default: settings,
+  config: settings,
+}));
+const linking = vi.hoisted(() => ({
+  addRelationToSharedProject: vi.fn(),
+  waitForRelationInBackend: vi.fn(),
+}));
+vi.mock('../../../collaboration/linkRelation', () => linking);
+
 vi.mock('../../../services/api', () => ({
   apiService: {
     findMetaModels: vi.fn(),
@@ -70,6 +82,7 @@ const waitForOptionsLoaded = async () => {
 describe('LinkMetaModelsPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    settings.collaborationUrl = undefined;
     apiService.findMetaModels.mockResolvedValue({ data: catalogMetaModels, message: null });
   });
 
@@ -234,6 +247,74 @@ describe('LinkMetaModelsPanel', () => {
       await screen.findByText('MetaModel Ids not found in this VSUM'),
     ).toBeInTheDocument();
     expect(onLinked).not.toHaveBeenCalled();
+  });
+
+  describe('with a collaboration server', () => {
+    /** Fills in the form for linking model 2 to model 4 and submits it. */
+    async function submitLink(onLinked: () => void) {
+      render(
+        <LinkMetaModelsPanel
+          vsumId={1}
+          existingMetaModels={existingMetaModels}
+          existingRelations={existingRelations}
+          onLinked={onLinked}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: '+ Link Meta Models' }));
+      await waitForOptionsLoaded();
+      const [sourceSelect, targetSelect] = screen.getAllByRole('combobox');
+      fireEvent.change(sourceSelect, { target: { value: '2' } });
+      fireEvent.change(targetSelect, { target: { value: '4' } });
+      fireEvent.change(document.querySelector('input[type="file"]') as HTMLInputElement, { target: { files: [reactionsFile] } });
+      fireEvent.click(screen.getByRole('button', { name: 'Link' }));
+    }
+
+    beforeEach(() => {
+      settings.collaborationUrl = 'ws://localhost:1234';
+      apiService.uploadFile.mockResolvedValue({ data: { id: 99 }, message: 'ok' });
+      linking.addRelationToSharedProject.mockResolvedValue(undefined);
+      linking.waitForRelationInBackend.mockResolvedValue(true);
+    });
+
+    it('adds the relation through the shared project, not by sending the whole project', async () => {
+      const onLinked = vi.fn();
+
+      await submitLink(onLinked);
+      await waitFor(() => expect(onLinked).toHaveBeenCalled());
+
+      expect(apiService.uploadFile).toHaveBeenCalledWith(reactionsFile, 'REACTION');
+      expect(linking.addRelationToSharedProject).toHaveBeenCalledWith({
+        serverUrl: 'ws://localhost:1234',
+        projectId: 1,
+        sourceId: 2,
+        targetId: 4,
+        reactionFileId: 99,
+      });
+      expect(apiService.syncVsumChanges).not.toHaveBeenCalled();
+    });
+
+    it('refreshes only once the backend has the relation, since the server saves a moment later', async () => {
+      const order: string[] = [];
+      linking.waitForRelationInBackend.mockImplementation(async () => { order.push('backend has it'); return true; });
+      const onLinked = vi.fn(() => { order.push('refreshed'); });
+
+      await submitLink(onLinked);
+      await waitFor(() => expect(onLinked).toHaveBeenCalled());
+
+      expect(linking.waitForRelationInBackend).toHaveBeenCalledWith(1, 2, 4);
+      expect(order).toEqual(['backend has it', 'refreshed']);
+    });
+
+    it('says why it failed, and does not refresh, if the project cannot be joined', async () => {
+      linking.addRelationToSharedProject.mockRejectedValue(new Error('The collaboration server could not be reached.'));
+      const onLinked = vi.fn();
+
+      await submitLink(onLinked);
+
+      expect(await screen.findByText('The collaboration server could not be reached.')).toBeInTheDocument();
+      expect(onLinked).not.toHaveBeenCalled();
+      expect(apiService.syncVsumChanges).not.toHaveBeenCalled();
+    });
   });
 
   it('cancel hides the form and resets its state', async () => {

@@ -10,8 +10,15 @@
  * - .env.production (production builds)
  */
 
+import { parseCollaborationUrl } from '../collaboration/collaborationUrl';
+
 interface EnvironmentConfig {
   apiBaseUrl: string;
+  /**
+   * WebSocket address of the collaboration server (REACT_APP_COLLABORATION_URL), without a trailing
+   * slash. Without it there is no live collaboration and the canvas works as before.
+   */
+  collaborationUrl: string | undefined;
   environment: 'local' | 'staging' | 'production';
   isDevelopment: boolean;
   isStaging: boolean;
@@ -38,6 +45,7 @@ validateEnvironment();
  */
 export const config: EnvironmentConfig = {
   apiBaseUrl: process.env.REACT_APP_API_BASE_URL!,
+  collaborationUrl: parseCollaborationUrl(process.env.REACT_APP_COLLABORATION_URL),
   environment: (process.env.REACT_APP_ENV || 'production') as EnvironmentConfig['environment'],
   isDevelopment: process.env.REACT_APP_ENV === 'local',
   isStaging: process.env.REACT_APP_ENV === 'staging',
