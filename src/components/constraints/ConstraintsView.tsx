@@ -2071,19 +2071,21 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
 
       {/* Bottom editor — floats over the center canvas, re-enables pointer events */}
       {selectedRule && hasBeenVisible && (
-        <form aria-label="Rule editor" onSubmit={event => event.preventDefault()} style={{ position: 'absolute', bottom: 0, left: 260, right: 300, pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }} onKeyDown={e => e.stopPropagation()}>
-          <EditorPanel
-            rule={selectedRule}
-            ruleSets={ruleSets}
-            colorMap={colorMap}
-            metaClasses={metaClasses}
-            onClose={() => { lockSelection(); setSelectedRule(null); onHighlightNode?.(null); }}
-            onSave={handleSaveRule}
-            vsumId={vsumId ?? undefined}
-            onHighlightNode={onHighlightNode}
-            canvasNodes={canvasNodes}
-          />
-        </form>
+        <section aria-label="Rule editor" style={{ position: 'absolute', bottom: 0, left: 260, right: 300, pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }}>
+          <form onSubmit={event => event.preventDefault()} onKeyDown={event => event.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, margin: 0 }}>
+            <EditorPanel
+              rule={selectedRule}
+              ruleSets={ruleSets}
+              colorMap={colorMap}
+              metaClasses={metaClasses}
+              onClose={() => { lockSelection(); setSelectedRule(null); onHighlightNode?.(null); }}
+              onSave={handleSaveRule}
+              vsumId={vsumId ?? undefined}
+              onHighlightNode={onHighlightNode}
+              canvasNodes={canvasNodes}
+            />
+          </form>
+        </section>
       )}
       {selectedRuleSet && !selectedRule && (
         <section aria-label="Rule set panel" style={{ position: 'absolute', bottom: 0, left: 260, right: 300, pointerEvents: 'auto', maxHeight: '42%', display: 'flex', flexDirection: 'column' }}>
