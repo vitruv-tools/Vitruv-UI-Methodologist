@@ -1,4 +1,4 @@
-import React, { useState, useRef, KeyboardEvent } from 'react';
+import React, { useId, useState, useRef, KeyboardEvent } from 'react';
 
 interface KeywordTagsInputProps {
   keywords: string[];
@@ -77,6 +77,8 @@ export const KeywordTagsInput: React.FC<KeywordTagsInputProps> = ({
   const [inputValue, setInputValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const generatedId = useId();
+  const inputId = id ?? generatedId;
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -91,14 +93,6 @@ export const KeywordTagsInput: React.FC<KeywordTagsInputProps> = ({
       onChange([...keywords, trimmedValue]);
       setInputValue('');
     }
-  };
-
-  const handleContainerMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    const target = e.target as HTMLElement;
-    if (target.closest('button')) {
-      return;
-    }
-    inputRef.current?.focus();
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -139,13 +133,13 @@ export const KeywordTagsInput: React.FC<KeywordTagsInputProps> = ({
   };
 
   return (
-    <div
+    <label
+      htmlFor={inputId}
       style={{
         ...containerStyle,
         ...(isFocused ? containerFocusStyle : {}),
         ...style
       }}
-      onMouseDown={handleContainerMouseDown}
     >
       {keywords.map((keyword) => (
         <div key={keyword} style={tagStyle}>
@@ -172,7 +166,7 @@ export const KeywordTagsInput: React.FC<KeywordTagsInputProps> = ({
       
       <input
         ref={inputRef}
-        id={id}
+        id={inputId}
         type="text"
         value={inputValue}
         onChange={handleInputChange}
@@ -182,6 +176,6 @@ export const KeywordTagsInput: React.FC<KeywordTagsInputProps> = ({
         style={inputStyle}
         placeholder={keywords.length === 0 ? placeholder : ''}
       />
-    </div>
+    </label>
   );
 };

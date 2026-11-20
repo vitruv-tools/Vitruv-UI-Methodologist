@@ -48,7 +48,7 @@ export const reactionsMonarch: languages.IMonarchLanguage = {
         }
       }],
 
-      [/\d*\.\d+([eE][+-]?\d+)?/, 'number.float'],
+      [/(?:\d+\.\d+|\.\d+)(?:[eE][+-]?\d+)?/, 'number.float'],
       [/0[xX][0-9a-fA-F]+/, 'number.hex'],
       [/\d+/, 'number'],
 
@@ -79,7 +79,7 @@ export const reactionsMonarch: languages.IMonarchLanguage = {
     whitespace: [
       [/[ \t\r\n]+/, 'white'],
       [/\/\*/, 'comment', '@comment'],
-      [/\/\/.*$/, 'comment'],
+      [/\/\/[^\r\n]*/, 'comment'],
     ],
   },
 };

@@ -22,28 +22,28 @@ function connectionHandleArrowSvg(
   switch (position) {
     case 'top':
       return (
-        <svg width={size} height={size} viewBox="0 0 24 24" style={svgStyle}>
+        <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" style={svgStyle}>
           <line x1="12" y1="24" x2="12" y2="8" stroke={color} strokeWidth="2" strokeLinecap="round" />
           <polygon points="12,2 8,10 16,10" fill={color} />
         </svg>
       );
     case 'bottom':
       return (
-        <svg width={size} height={size} viewBox="0 0 24 24" style={svgStyle}>
+        <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" style={svgStyle}>
           <line x1="12" y1="0" x2="12" y2="16" stroke={color} strokeWidth="2" strokeLinecap="round" />
           <polygon points="12,22 8,14 16,14" fill={color} />
         </svg>
       );
     case 'left':
       return (
-        <svg width={size} height={size} viewBox="0 0 24 24" style={svgStyle}>
+        <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" style={svgStyle}>
           <line x1="24" y1="12" x2="8" y2="12" stroke={color} strokeWidth="2" strokeLinecap="round" />
           <polygon points="2,12 10,8 10,16" fill={color} />
         </svg>
       );
     case 'right':
       return (
-        <svg width={size} height={size} viewBox="0 0 24 24" style={svgStyle}>
+        <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" style={svgStyle}>
           <line x1="0" y1="12" x2="16" y2="12" stroke={color} strokeWidth="2" strokeLinecap="round" />
           <polygon points="22,12 14,8 14,16" fill={color} />
         </svg>

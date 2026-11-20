@@ -454,7 +454,7 @@ export class AuthService {
     }
   }
 
-  static async signOut(): Promise<void> {
+  static signOut(): void {
     localStorage.removeItem('auth.access_token');
     localStorage.removeItem('auth.refresh_token');
     localStorage.removeItem('auth.expires_in');

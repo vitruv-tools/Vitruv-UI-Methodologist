@@ -104,7 +104,7 @@ export function useFastLoginCallback(): {
       }
     };
 
-    complete();
+    void complete();
 
     return () => {
       cancelled = true;

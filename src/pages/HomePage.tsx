@@ -53,7 +53,7 @@ export const HomePage: React.FC = () => {
         userRole="Methodologist"
         userEmail={userEmail}
         sharedProjectsUnreadCount={unreadCount}
-        onLogout={() => AuthService.signOut().then(() => { globalThis.location.href = '/login'; })}
+        onLogout={() => { AuthService.signOut(); globalThis.location.href = '/login'; }}
       />
       <main style={{
         flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative',

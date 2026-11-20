@@ -128,7 +128,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
             }
         };
 
-        checkAuth();
+        void checkAuth();
         const onSignOut = () => setUser(null);
         globalThis.addEventListener('auth:signout', onSignOut);
         return () => {

@@ -64,7 +64,7 @@ const formatDate = (iso: string) => {
 // ── sub-components ─────────────────────────────────────────────────────────
 
 const SearchIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="8" />
     <line x1="21" y1="21" x2="16.65" y2="16.65" />
   </svg>
@@ -221,7 +221,7 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
 
   const canSave = !!(form.name.trim() && form.description.trim() && form.domain.trim() && form.keywords.length > 0 && !saving);
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSave = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSaving(true); setError(''); setSuccess('');
     try {
@@ -253,7 +253,7 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
         <div style={{ padding: '14px 20px', background: 'var(--v-surface)', borderBottom: '1px solid var(--v-border)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, overflow: 'hidden' }}>
             {/* BoxIcon — same as model cards */}
-            <svg width="28" height="28" viewBox="0 0 32 32" fill="none" style={{ flexShrink: 0 }}>
+            <svg aria-hidden="true" width="28" height="28" viewBox="0 0 32 32" fill="none" style={{ flexShrink: 0 }}>
               <path d="M16 5L27 11V21L16 27L5 21V11L16 5Z" stroke="#049484" strokeWidth="1.6" fill="#04948422" strokeLinejoin="round" />
               <path d="M16 5V27" stroke="#049484" strokeWidth="1.3" strokeLinecap="round" />
               <path d="M5 11L27 11" stroke="#049484" strokeWidth="1.3" strokeLinecap="round" />
@@ -279,7 +279,7 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
                 onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = DARK; (e.currentTarget as HTMLButtonElement).style.color = '#fff'; (e.currentTarget as HTMLButtonElement).style.borderColor = DARK; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--v-surface-muted)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--v-text-secondary)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--v-border)'; }}
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                 </svg>
@@ -409,19 +409,19 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
               {ecoreContent && (
                 <div style={{ display: 'flex', gap: 4 }}>
                   <DPreviewBtn title={diagramEditable ? 'Open full-screen UML editor' : 'Open full-screen UML view'} onClick={() => setUmlExpanded(true)}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
                       <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
                     </svg>
                   </DPreviewBtn>
                   <DPreviewBtn title="Zoom in" onClick={() => diagramRef.current?.zoomIn()}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   </DPreviewBtn>
                   <DPreviewBtn title="Zoom out" onClick={() => diagramRef.current?.zoomOut()}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   </DPreviewBtn>
                   <DPreviewBtn title="Fit to view" onClick={() => diagramRef.current?.fitToView()}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/>
                       <path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
                     </svg>
