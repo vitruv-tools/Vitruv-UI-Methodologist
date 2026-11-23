@@ -17,7 +17,7 @@ export const ConnectionLine: React.FC<ConnectionLineProps> = React.memo(
     const hasPolyline = Boolean(points && points.length > 1);
 
     return (
-      <svg
+      <svg aria-hidden="true"
         style={{
           position: 'absolute',
           top: 0,

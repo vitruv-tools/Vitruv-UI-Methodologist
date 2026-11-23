@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { useToast } from './ToastProvider';
@@ -84,6 +84,11 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { showSuccess, showError } = useToast();
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isOpen) nameInputRef.current?.focus();
+  }, [isOpen]);
 
   useModalBodyLock(isOpen);
 
@@ -230,6 +235,7 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
               Name <span style={{ color: '#dc2626' }}>*</span>
             </label>
             <input
+              ref={nameInputRef}
               id="vsum-name-input"
               placeholder="e.g. My V-SUM"
               value={name}
@@ -239,7 +245,6 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
               onBlur={e => { e.currentTarget.style.borderColor = 'var(--v-border)'; e.currentTarget.style.boxShadow = 'none'; }}
               style={inputBase}
               disabled={loading}
-              autoFocus
             />
           </div>
 

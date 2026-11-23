@@ -130,7 +130,7 @@ export function OtpVerificationPage() {
     setError(errorMessage);
   };
 
-  const handleVerifyOtp = async (e: React.FormEvent) => {
+  const handleVerifyOtp = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);

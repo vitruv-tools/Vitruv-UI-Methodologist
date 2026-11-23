@@ -11,7 +11,7 @@ interface AuthContextType {
     signIn: (username: string, password: string) => Promise<User>;
     fastLoginWithCode: (authorizationCode: string) => Promise<User>;
     signUp: (userData: SignUpCredentials) => Promise<void>;
-    signOut: () => Promise<void>;
+    signOut: () => void;
     refreshToken: () => Promise<any>;
     refreshCurrentUser: () => Promise<User | null>;
 }
@@ -122,13 +122,13 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
                 }
             } catch (error) {
                 console.error('Auth check failed:', error);
-                await AuthService.signOut();
+                AuthService.signOut();
             } finally {
                 setIsLoading(false);
             }
         };
 
-        checkAuth();
+        void checkAuth();
         const onSignOut = () => setUser(null);
         globalThis.addEventListener('auth:signout', onSignOut);
         return () => {
@@ -298,9 +298,9 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
         }
     }, []);
 
-    const signOut = useCallback(async () => {
+    const signOut = useCallback(() => {
         try {
-            await AuthService.signOut();
+            AuthService.signOut();
             setUser(null);
         } catch (error) {
             console.error('Sign out error:', error);
@@ -314,7 +314,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
         } catch (error) {
             console.error('Token refresh failed:', error);
             try {
-                await AuthService.signOut();
+                AuthService.signOut();
                 setUser(null);
             } catch {
                 setUser(null);

@@ -30,13 +30,13 @@ interface ProjectPickerMenuProps {
 }
 
 const ChevronIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="6 9 12 15 18 9" />
   </svg>
 );
 
 const PlusIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
     <line x1="12" y1="5" x2="12" y2="19" />
     <line x1="5" y1="12" x2="19" y2="12" />
   </svg>
@@ -83,7 +83,8 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
   const wrapRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDialogElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const loadProjects = useCallback(async (query: string) => {
     setLoading(true);
@@ -96,6 +97,10 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (open) searchInputRef.current?.focus();
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -187,16 +192,18 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
         }}
         onClick={closeMenu}
       />
-      <div
+      <dialog
         ref={menuRef}
+        open
         id="project-picker-menu"
-        role="dialog"
         aria-modal="false"
         aria-label="Your projects"
         style={{
           position: 'fixed',
+          inset: 'auto',
           margin: 0,
           padding: 0,
+          color: 'inherit',
           top: menuPos.top,
           left: menuPos.left,
           width: 320,
@@ -217,11 +224,11 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
           Your projects
         </div>
         <input
+          ref={searchInputRef}
           type="search"
           placeholder="Search…"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          autoFocus
           style={{
             width: '100%',
             boxSizing: 'border-box',
@@ -373,7 +380,7 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
           );
         })}
       </div>
-      </div>
+      </dialog>
     </>
   ) : null;
 

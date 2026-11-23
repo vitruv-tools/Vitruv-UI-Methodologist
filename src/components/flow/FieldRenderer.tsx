@@ -77,19 +77,27 @@ const BooleanFieldControl: React.FC<FieldControlProps> = ({
   onChange,
   disabled,
   label,
+  description,
+  required,
+  error,
 }) => (
-  <FormControlLabel
-    control={
-      <Checkbox
-        checked={value === true}
-        onChange={(e) => onChange(field.name, e.target.checked)}
-        disabled={disabled}
-        size="small"
-      />
-    }
-    label={label}
-    sx={{ mb: 1 }}
-  />
+  <FormControl error={!!error} required={required} sx={{ mb: 1 }}>
+    <FormControlLabel
+      control={
+        <Checkbox
+          checked={value === true}
+          onChange={(e) => onChange(field.name, e.target.checked)}
+          disabled={disabled}
+          required={required}
+          size="small"
+        />
+      }
+      label={label}
+    />
+    {(error || description) && (
+      <FormHelperText>{error ?? description}</FormHelperText>
+    )}
+  </FormControl>
 );
 
 const EnumFieldControl: React.FC<FieldControlProps> = ({

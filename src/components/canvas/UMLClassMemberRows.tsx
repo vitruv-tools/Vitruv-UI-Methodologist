@@ -1,4 +1,6 @@
 import {
+  useEffect,
+  useRef,
   useState,
   type ChangeEvent,
   type CSSProperties,
@@ -273,6 +275,11 @@ const UmlAttributeRowEditor = ({
   const visibilitySelectWidth = expanded ? 42 : 34;
   const nameInputMinWidth = expanded ? 72 : 40;
   const typeSelectWidth = expanded ? 96 : 76;
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    nameInputRef.current?.focus();
+  }, []);
 
   // Choosing a value only updates the edit, so several fields can be changed.
   // The row is saved when the user leaves it (Enter, Tab out or a click elsewhere).
@@ -316,7 +323,7 @@ const UmlAttributeRowEditor = ({
         ))}
       </select>
       <input
-        autoFocus
+        ref={nameInputRef}
         value={editing.name}
         onChange={event => onEditChange(
           event.target.value,
@@ -533,6 +540,11 @@ const UmlOperationRowEditor = ({
   const visibilitySelectWidth = expanded ? 42 : 34;
   const nameInputMinWidth = expanded ? 72 : 40;
   const returnTypeSelectWidth = expanded ? 86 : 68;
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    nameInputRef.current?.focus();
+  }, []);
 
   // Choosing a value only updates the edit, so several fields can be changed.
   // The row is saved when the user leaves it (Enter, Tab out or a click elsewhere).
@@ -570,7 +582,7 @@ const UmlOperationRowEditor = ({
         ))}
       </select>
       <input
-        autoFocus
+        ref={nameInputRef}
         value={editing.name}
         onChange={event => onEditChange(
           event.target.value,

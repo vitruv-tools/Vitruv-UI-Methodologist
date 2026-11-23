@@ -124,33 +124,38 @@ function clearVsumTabSessions(
   }
 }
 
-async function dispatchWorkspaceMetaModels(metaModels: VsumMetaModelRef[]): Promise<void> {
-  for (const model of metaModels) {
-    if (!model.ecoreFileId) continue;
-    try {
-      const fileContent = await apiService.getFile(model.ecoreFileId);
-      globalThis.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
-        detail: {
-          fileContent,
-          fileName: `${appendMetaModelVersion(model.name, model.version)}.ecore`,
-          displayName: model.name,
-          version: model.version,
-          description: model.description,
-          keywords: model.keyword?.join(', '),
-          domain: model.domain,
-          createdAt: model.createdAt,
-          metaModelId: model.id,
-          metaModelSourceId: model.sourceId ?? model.id,
-          ecoreFileId: model.ecoreFileId,
-          genModelFileId: model.genModelFileId,
-          fromServerLoad: true,
-        },
-      }));
-      await new Promise(r => setTimeout(r, 50));
-    } catch {
-      // model without readable ecore file – skip canvas box
-    }
+async function dispatchWorkspaceMetaModel(model: VsumMetaModelRef): Promise<void> {
+  if (!model.ecoreFileId) return;
+  try {
+    const fileContent = await apiService.getFile(model.ecoreFileId);
+    globalThis.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
+      detail: {
+        fileContent,
+        fileName: `${appendMetaModelVersion(model.name, model.version)}.ecore`,
+        displayName: model.name,
+        version: model.version,
+        description: model.description,
+        keywords: model.keyword?.join(', '),
+        domain: model.domain,
+        createdAt: model.createdAt,
+        metaModelId: model.id,
+        metaModelSourceId: model.sourceId ?? model.id,
+        ecoreFileId: model.ecoreFileId,
+        genModelFileId: model.genModelFileId,
+        fromServerLoad: true,
+      },
+    }));
+    await new Promise(r => setTimeout(r, 50));
+  } catch {
+    // model without readable ecore file – skip canvas box
   }
+}
+
+async function dispatchWorkspaceMetaModels(metaModels: VsumMetaModelRef[]): Promise<void> {
+  await metaModels.reduce(
+    (previous, model) => previous.then(() => dispatchWorkspaceMetaModel(model)),
+    Promise.resolve(),
+  );
 }
 
 async function dispatchMetaModelRelations(
@@ -328,7 +333,7 @@ async function loadOpenCanvasTab(
   nextId: string,
   cancelled: boolean,
   openTabs: OpenCanvasTab[],
-  loadingTabRef: React.MutableRefObject<string | null>,
+  loadingTabRef: React.RefObject<string | null>,
   clearCanvasWorkspace: () => void,
   loadVsum: (vsumId: number, forInstanceId?: string) => Promise<void>,
 ): Promise<void> {

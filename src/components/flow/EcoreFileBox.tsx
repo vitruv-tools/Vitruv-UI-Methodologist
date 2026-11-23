@@ -147,7 +147,12 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
 
   const boxRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
   const skipBlurSaveRef = useRef(false);
+
+  useEffect(() => {
+    if (renaming) renameInputRef.current?.focus();
+  }, [renaming]);
 
   // Close menu on any left-click outside
   useEffect(() => {
@@ -301,46 +306,27 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
         ref={boxRef}
         style={{ position: 'relative', display: 'inline-block' }}
       >
-        {/* ── Card ── */}
-        <div
-          role="button"
-          tabIndex={0}
-          aria-label={cardAriaLabel}
-          aria-pressed={selected}
-          onClick={handleClick}
-          onDoubleClick={handleDoubleClick}
-          onContextMenu={handleContextMenu}
-          onKeyDown={handleCardKeyDown}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-          style={{
-            width: 118,
-            height: 126,
-            borderRadius: 16,
-            background: bg,
-            border: `2px solid ${cardBorder}`,
-            boxShadow: cardShadow,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 10,
-            cursor: 'pointer',
-            userSelect: 'none',
-            transition: 'all 0.15s',
-            transform: cardTransform,
-            position: 'relative',
-          }}
-        >
-          {connectionHandles}
-
-          {/* 3D box icon */}
-          <CardIcon />
-
-          {/* Model name */}
-          {renaming ? (
+        {connectionHandles}
+        {renaming ? (
+          <div
+            style={{
+              width: 118,
+              height: 126,
+              borderRadius: 16,
+              background: bg,
+              border: `2px solid ${cardBorder}`,
+              boxShadow: cardShadow,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+              transform: cardTransform,
+            }}
+          >
+            <CardIcon />
             <input
-              autoFocus
+              ref={renameInputRef}
               className="nodrag nopan"
               value={renameVal}
               onChange={e => setRenameVal(e.target.value)}
@@ -359,7 +345,41 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
                 userSelect: 'text',
               }}
             />
-          ) : (
+          </div>
+        ) : (
+          <button
+            type="button"
+            aria-label={cardAriaLabel}
+            aria-pressed={selected}
+            onClick={handleClick}
+            onDoubleClick={handleDoubleClick}
+            onContextMenu={handleContextMenu}
+            onKeyDown={handleCardKeyDown}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            style={{
+              width: 118,
+              height: 126,
+              borderRadius: 16,
+              background: bg,
+              border: `2px solid ${cardBorder}`,
+              boxShadow: cardShadow,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+              cursor: 'pointer',
+              userSelect: 'none',
+              transition: 'background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s',
+              transform: cardTransform,
+              font: 'inherit',
+              padding: 0,
+              margin: 0,
+              color: 'inherit',
+            }}
+          >
+            <CardIcon />
             <span style={{
               fontSize: 12,
               fontWeight: 700,
@@ -377,34 +397,34 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
                 </span>
               )}
             </span>
-          )}
+          </button>
+        )}
 
-          {readOnly && !locked && (
-            <button
-              type="button"
-              title="Open UML diagram"
-              onClick={openUml}
-              style={{
-                position: 'absolute',
-                bottom: 8,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                padding: '3px 8px',
-                borderRadius: 8,
-                border: '1px solid rgba(0,0,0,0.15)',
-                background: 'rgba(255,255,255,0.85)',
-                color: 'rgba(0,0,0,0.75)',
-                fontSize: 10,
-                fontWeight: 700,
-                cursor: 'pointer',
-                lineHeight: 1.2,
-                whiteSpace: 'nowrap',
-              }}
-            >
-              Open UML
-            </button>
-          )}
-        </div>
+        {readOnly && !locked && (
+          <button
+            type="button"
+            title="Open UML diagram"
+            onClick={openUml}
+            style={{
+              position: 'absolute',
+              bottom: 8,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              padding: '3px 8px',
+              borderRadius: 8,
+              border: '1px solid rgba(0,0,0,0.15)',
+              background: 'rgba(255,255,255,0.85)',
+              color: 'rgba(0,0,0,0.75)',
+              fontSize: 10,
+              fontWeight: 700,
+              cursor: 'pointer',
+              lineHeight: 1.2,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Open UML
+          </button>
+        )}
 
       </div>
 
@@ -586,7 +606,7 @@ const CMItem: React.FC<{
 // ── card icon ─────────────────────────────────────────────────────────────────
 
 const CardIcon = () => (
-  <svg width="46" height="46" viewBox="0 0 32 32" fill="none">
+  <svg aria-hidden="true" width="46" height="46" viewBox="0 0 32 32" fill="none">
     <path d="M16 5L27 11V21L16 27L5 21V11L16 5Z"
       stroke="rgba(0,0,0,0.38)" strokeWidth="1.4" fill="rgba(255,255,255,0.55)" strokeLinejoin="round" />
     <path d="M16 5V27" stroke="rgba(0,0,0,0.28)" strokeWidth="1.2" strokeLinecap="round" />
@@ -599,33 +619,33 @@ const CardIcon = () => (
 // ── small icons ───────────────────────────────────────────────────────────────
 
 const UMLIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="21" x2="9" y2="9" />
   </svg>
 );
 const ConnectIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
   </svg>
 );
 const EditIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z" />
   </svg>
 );
 const InfoIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
   </svg>
 );
 const TrashIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4h6v2" />
   </svg>
 );
 const DownloadIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
     <polyline points="7 10 12 15 17 10" />
     <line x1="12" y1="15" x2="12" y2="3" />

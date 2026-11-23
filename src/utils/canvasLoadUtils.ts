@@ -30,10 +30,15 @@ export async function waitForMetaModelsOnCanvas(
     });
   };
 
-  while (Date.now() < deadline) {
+  const waitUntilReady = async (): Promise<void> => {
     if (isReady()) return;
+    if (Date.now() >= deadline) {
+      console.warn('Timed out waiting for metamodel boxes on canvas before loading relations');
+      return;
+    }
     await new Promise(r => setTimeout(r, pollMs));
-  }
+    await waitUntilReady();
+  };
 
-  console.warn('Timed out waiting for metamodel boxes on canvas before loading relations');
+  await waitUntilReady();
 }
