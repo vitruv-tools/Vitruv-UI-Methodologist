@@ -1,6 +1,6 @@
 import type { Mock } from 'vitest';
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { CanvasPage } from '../../pages/CanvasPage';
 import { apiService } from '../../services/api';
 import type { CollaborationState } from '../../collaboration/useCanvasCollaboration';
@@ -11,6 +11,8 @@ let mockRouteId = '10';
 const collaboration: { current: CollaborationState } = vi.hoisted(() => ({ current: null as any }));
 /** The props of the last rendered canvas. */
 const canvasProps: { current: any } = vi.hoisted(() => ({ current: null }));
+/** What the page calls on the canvas for Undo and Redo. */
+const canvasHistory = vi.hoisted(() => ({ undo: vi.fn(), redo: vi.fn() }));
 
 vi.mock('../../collaboration/useCanvasCollaboration', () => ({
   useCanvasCollaboration: () => collaboration.current,
@@ -44,8 +46,8 @@ vi.mock('../../components/flow/FlowCanvas', async () => {
         addEcoreFile: vi.fn(),
         updateEcoreFileData: vi.fn(),
         resetExpandedFile: vi.fn(),
-        undo: vi.fn(),
-        redo: vi.fn(),
+        undo: canvasHistory.undo,
+        redo: canvasHistory.redo,
         getReactionEdges: vi.fn(() => []),
         getViewTypes: vi.fn(() => []),
         getWorkspaceSnapshot: vi.fn(() => ({ metaModelIds: [], metaModelRelationRequests: [] })),
@@ -149,7 +151,7 @@ describe('with live collaboration', () => {
     collaboration.current = live();
   });
 
-  it('writes the changes of the canvas into the project, and has no Save and no Undo', async () => {
+  it('writes the changes of the canvas into the project, and has no Save', async () => {
     render(<CanvasPage />);
     await waitForProject('Project A');
 
@@ -159,8 +161,21 @@ describe('with live collaboration', () => {
     // Saving through the canvas would send it as the whole project.
     expect(canvasProps.current.onSaveChanges).toBeUndefined();
     expect(screen.queryByRole('button', { name: /^Save/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Undo/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Redo/ })).not.toBeInTheDocument();
+  });
+
+  it('has Undo and Redo, which the canvas answers with the history of the project', async () => {
+    canvasHistory.undo.mockClear();
+    canvasHistory.redo.mockClear();
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+    expect(screen.getByRole('button', { name: 'Undo. Nothing to undo' })).toBeInTheDocument();
+
+    act(() => canvasProps.current.onHistoryChange(true, true));
+    fireEvent.click(screen.getByRole('button', { name: 'Undo. Undo the last action' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Redo. Redo the last undone action' }));
+
+    expect(canvasHistory.undo).toHaveBeenCalledTimes(1);
+    expect(canvasHistory.redo).toHaveBeenCalledTimes(1);
   });
 
   it('does not save with Cmd+S, but still keeps the browser from opening its dialog', async () => {

@@ -228,7 +228,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
   const startRename = () => {
     if (readOnly) return;
     skipBlurSaveRef.current = false;
-    setRenameVal(removeExt(fileName));
+    setRenameVal(baseName);
     setRenaming(true);
   };
   const saveRename = () => {
