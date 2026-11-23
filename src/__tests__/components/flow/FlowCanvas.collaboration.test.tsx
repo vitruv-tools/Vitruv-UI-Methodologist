@@ -97,7 +97,28 @@ const reaction = (source: number, target: number, reactionFileId: number | null 
 });
 
 function collaborationMock() {
-  return { pushLocalChanges: vi.fn(), pushMappings: vi.fn(), pushReactionLayout: vi.fn(), removeModel: vi.fn(), removeRelation: vi.fn() };
+  const listeners = new Set<(history: { canUndo: boolean; canRedo: boolean }) => void>();
+  const mock = {
+    pushLocalChanges: vi.fn(),
+    pushMappings: vi.fn(),
+    pushReactionLayout: vi.fn(),
+    removeModel: vi.fn(),
+    removeRelation: vi.fn(),
+    undo: vi.fn(() => true),
+    redo: vi.fn(() => true),
+    state: { canUndo: false, canRedo: false },
+    history: vi.fn(() => mock.state),
+    onHistoryChange: vi.fn((listener: (history: { canUndo: boolean; canRedo: boolean }) => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    }),
+    /** The shared history changes, e.g. because the user did something. */
+    setHistory(canUndo: boolean, canRedo: boolean) {
+      mock.state = { canUndo, canRedo };
+      listeners.forEach((listener) => listener(mock.state));
+    },
+  };
+  return mock;
 }
 
 function renderCanvas(props: Partial<React.ComponentProps<typeof FlowCanvas>> = {}) {
@@ -429,5 +450,110 @@ describe('undo', () => {
     act(() => { fireEvent.keyDown(document, { key: 'z', ctrlKey: true }); });
 
     expect(initial.undo).toHaveBeenCalled();
+  });
+});
+
+describe('undoing own changes', () => {
+  it('uses the history of the shared project, not the snapshots of the canvas', () => {
+    initial.canUndo = true;
+    const collaboration = collaborationMock();
+    const { ref } = renderCanvas({ collaboration, disableUndo: true });
+
+    expect(ref.current.canUndo).toBe(false);
+    act(() => collaboration.setHistory(true, false));
+
+    expect(ref.current.canUndo).toBe(true);
+    expect(ref.current.canRedo).toBe(false);
+    act(() => ref.current.undo());
+    expect(collaboration.undo).toHaveBeenCalledTimes(1);
+  });
+
+  it('redoes in the shared project', () => {
+    const collaboration = collaborationMock();
+    const { ref } = renderCanvas({ collaboration, disableUndo: true });
+    act(() => collaboration.setHistory(false, true));
+
+    expect(ref.current.canRedo).toBe(true);
+    act(() => ref.current.redo());
+
+    expect(collaboration.redo).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts with what the project already has to undo', () => {
+    const collaboration = collaborationMock();
+    collaboration.state = { canUndo: true, canRedo: true };
+    const { ref } = renderCanvas({ collaboration, disableUndo: true });
+
+    expect(ref.current.canUndo).toBe(true);
+    expect(ref.current.canRedo).toBe(true);
+  });
+
+  it('tells the page what there is to undo and redo, for the buttons', () => {
+    const collaboration = collaborationMock();
+    const onHistoryChange = vi.fn();
+    renderCanvas({ collaboration, disableUndo: true, onHistoryChange });
+
+    act(() => collaboration.setHistory(true, false));
+
+    expect(onHistoryChange).toHaveBeenLastCalledWith(true, false);
+  });
+
+  it('is done with Cmd/Ctrl+Z and Shift+Cmd/Ctrl+Z', () => {
+    const collaboration = collaborationMock();
+    renderCanvas({ collaboration, disableUndo: true });
+    act(() => collaboration.setHistory(true, true));
+
+    fireEvent.keyDown(document, { key: 'z', ctrlKey: true });
+    fireEvent.keyDown(document, { key: 'z', ctrlKey: true, shiftKey: true });
+
+    expect(collaboration.undo).toHaveBeenCalledTimes(1);
+    expect(collaboration.redo).toHaveBeenCalledTimes(1);
+  });
+
+  it('is not possible for a viewer', () => {
+    const collaboration = collaborationMock();
+    collaboration.state = { canUndo: true, canRedo: true };
+    const { ref } = renderCanvas({ collaboration, disableUndo: true, readOnly: true });
+
+    expect(ref.current.canUndo).toBe(false);
+    act(() => ref.current.undo());
+    fireEvent.keyDown(document, { key: 'z', ctrlKey: true });
+
+    expect(collaboration.undo).not.toHaveBeenCalled();
+  });
+
+  it('stops listening to the project when the canvas goes away', () => {
+    const collaboration = collaborationMock();
+    const { unmount } = render(<FlowCanvas collaboration={collaboration} disableUndo />);
+    const stop = collaboration.onHistoryChange.mock.results[0].value as () => boolean;
+
+    unmount();
+
+    expect(stop).toBeDefined();
+    expect(() => collaboration.setHistory(true, true)).not.toThrow();
+  });
+
+  it('marks the positions written while a box is dragged, so that the whole drag is one step', () => {
+    vi.useFakeTimers();
+    const collaboration = collaborationMock();
+    const { ref } = renderCanvas({ collaboration, disableUndo: true });
+    act(() => { vi.advanceTimersByTime(1000); });
+    collaboration.pushLocalChanges.mockClear();
+
+    act(() => ref.current.loadDiagramData(
+      ref.current.getNodes().map((n: Node) => (n.id === 'ecore-1' ? { ...n, dragging: true, position: { x: 5, y: 0 } } : n)),
+      ref.current.getEdges(),
+    ));
+    act(() => { vi.advanceTimersByTime(100); });
+    expect(collaboration.pushLocalChanges).toHaveBeenLastCalledWith({ dragging: true });
+
+    act(() => ref.current.loadDiagramData(
+      ref.current.getNodes().map((n: Node) => (n.id === 'ecore-1' ? { ...n, dragging: false, position: { x: 9, y: 0 } } : n)),
+      ref.current.getEdges(),
+    ));
+    act(() => { vi.advanceTimersByTime(300); });
+
+    expect(collaboration.pushLocalChanges).toHaveBeenLastCalledWith({ dragging: false });
+    vi.useRealTimers();
   });
 });

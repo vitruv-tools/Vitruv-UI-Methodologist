@@ -12,10 +12,7 @@ interface CanvasSidebarToolbarProps {
   onDownloadJar: () => void;
   onDownloadBundle: () => void;
   onSaveChanges: () => void;
-  /**
-   * Changes are saved automatically through live collaboration. There is no Save then, and no Undo
-   * or Redo until they only undo the user's own changes.
-   */
+  /** Changes are saved automatically through live collaboration, so there is no Save. */
   collaborative?: boolean;
   onCheckBuild: () => void;
   onUndo: () => void;
@@ -445,7 +442,7 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
         )}
       </div>
 
-      {!readOnly && !collaborative && (
+      {!readOnly && (
         <div style={sidebarCardStyle}>
           <SidebarButton
             label="Undo"

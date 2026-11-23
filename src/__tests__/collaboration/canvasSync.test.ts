@@ -352,3 +352,145 @@ describe('without a project that is ready', () => {
     expect(updates).toEqual([]);
   });
 });
+
+describe('undoing', () => {
+  it('shows a taken-back rename on the canvas', async () => {
+    const mine = await started();
+    mine.canvas.state.models.get(1)!.name = 'Vehicle';
+    mine.canvasSync.pushLocalChanges();
+
+    expect(mine.canvasSync.undo()).toBe(true);
+    await mine.canvasSync.whenIdle();
+
+    expect(mine.canvas.state.models.get(1)?.name).toBe('Car');
+    expect(mine.project.read().models.get(1)?.name).toBe('Car');
+  });
+
+  it('brings a deleted metamodel and its relation back onto the canvas', async () => {
+    const mine = await started();
+    mine.canvasSync.removeModel(1);
+    mine.canvas.state.models.delete(1);
+    mine.canvas.state.relations.clear();
+
+    mine.canvasSync.undo();
+    await mine.canvasSync.whenIdle();
+
+    expect(mine.canvas.state.models.get(1)).toEqual({ sourceId: 1, name: 'Car', position: { x: 0, y: 0 } });
+    expect(mine.canvas.state.relations.has(pairKey(1, 2))).toBe(true);
+  });
+
+  it('writes what was taken back into the project only once: the next push does not undo the undo', async () => {
+    const mine = await started();
+    mine.canvas.state.models.get(1)!.name = 'Vehicle';
+    mine.canvasSync.pushLocalChanges();
+    mine.canvasSync.undo();
+    await mine.canvasSync.whenIdle();
+
+    mine.canvasSync.pushLocalChanges();
+
+    expect(mine.project.read().models.get(1)?.name).toBe('Car');
+    expect(mine.canvas.state.models.get(1)?.name).toBe('Car');
+  });
+
+  it('first writes what the user changed on the canvas a moment ago, so that this is what is taken back', async () => {
+    const mine = await started();
+    mine.canvas.state.models.get(1)!.name = 'Vehicle';
+
+    mine.canvasSync.undo();
+    await mine.canvasSync.whenIdle();
+
+    expect(mine.project.read().models.get(1)?.name).toBe('Car');
+    expect(mine.canvas.state.models.get(1)?.name).toBe('Car');
+  });
+
+  it('brings back what was taken back with redo', async () => {
+    const mine = await started();
+    mine.canvas.addModel(4, 'Tire', 9, 9);
+    mine.canvasSync.pushLocalChanges();
+    mine.canvasSync.undo();
+    await mine.canvasSync.whenIdle();
+    expect(mine.canvas.state.models.has(4)).toBe(false);
+
+    expect(mine.canvasSync.redo()).toBe(true);
+    await mine.canvasSync.whenIdle();
+
+    expect(mine.canvas.state.models.get(4)).toEqual({ sourceId: 4, name: 'Tire', position: { x: 9, y: 9 } });
+  });
+
+  it('reaches other users, and leaves what they did as it is', async () => {
+    const server = serverDocument();
+    const mine = await started(client(server));
+    const theirs = await started(client(server));
+    mine.canvas.state.models.get(1)!.name = 'Vehicle';
+    mine.canvasSync.pushLocalChanges();
+    theirs.canvas.state.models.get(2)!.position = { x: 500, y: 5 };
+    theirs.canvasSync.pushLocalChanges();
+    sync(mine.doc, theirs.doc);
+    sync(theirs.doc, mine.doc);
+
+    mine.canvasSync.undo();
+    sync(mine.doc, theirs.doc);
+    await Promise.all([mine.canvasSync.whenIdle(), theirs.canvasSync.whenIdle()]);
+
+    expect(theirs.canvas.state.models.get(1)?.name).toBe('Car');
+    expect(mine.canvas.state.models.get(2)?.position).toEqual({ x: 500, y: 5 });
+  });
+
+  it('does not undo what other users did', async () => {
+    const server = serverDocument();
+    const mine = await started(client(server));
+    const theirs = await started(client(server));
+    theirs.canvas.state.models.get(1)!.name = 'Vehicle';
+    theirs.canvasSync.pushLocalChanges();
+    sync(theirs.doc, mine.doc);
+    await mine.canvasSync.whenIdle();
+
+    expect(mine.canvasSync.history()).toEqual({ canUndo: false, canRedo: false });
+    expect(mine.canvasSync.undo()).toBe(false);
+    expect(mine.canvas.state.models.get(1)?.name).toBe('Vehicle');
+  });
+
+  it('takes back a whole drag in one step, however often its position was written', async () => {
+    const mine = await started();
+    for (const x of [10, 20, 30]) {
+      mine.canvas.state.models.get(1)!.position = { x, y: 0 };
+      mine.canvasSync.pushLocalChanges({ dragging: true });
+    }
+    mine.canvas.state.models.get(1)!.position = { x: 31, y: 0 };
+    mine.canvasSync.pushLocalChanges({ dragging: false });
+
+    mine.canvasSync.undo();
+    await mine.canvasSync.whenIdle();
+
+    expect(mine.canvas.state.models.get(1)?.position).toEqual({ x: 0, y: 0 });
+    expect(mine.canvasSync.history().canUndo).toBe(false);
+  });
+
+  it('tells when there is something to undo or redo', async () => {
+    const mine = await started();
+    const listener = vi.fn();
+    const stop = mine.canvasSync.onHistoryChange(listener);
+
+    mine.canvas.state.models.get(1)!.name = 'Vehicle';
+    mine.canvasSync.pushLocalChanges();
+    expect(listener).toHaveBeenLastCalledWith({ canUndo: true, canRedo: false });
+
+    mine.canvasSync.undo();
+    expect(listener).toHaveBeenLastCalledWith({ canUndo: false, canRedo: true });
+
+    stop();
+  });
+
+  it('does nothing before it has started and after it has stopped', async () => {
+    const before = client();
+    expect(before.canvasSync.undo()).toBe(false);
+
+    const mine = await started();
+    mine.canvas.state.models.get(1)!.name = 'Vehicle';
+    mine.canvasSync.pushLocalChanges();
+    mine.canvasSync.stop();
+
+    expect(mine.canvasSync.undo()).toBe(false);
+    expect(mine.project.read().models.get(1)?.name).toBe('Vehicle');
+  });
+});
