@@ -88,6 +88,35 @@ describe('CanvasProjectControls publish', () => {
     expect(screen.getByRole('button', { name: 'Publishing…' })).toBeDisabled();
     expect(screen.getByTestId('latest-version')).toHaveTextContent('Not published yet');
   });
+
+  it('opens the published version from its label, also for viewers', () => {
+    const onOpenLatestVersion = vi.fn();
+    render(
+      <CanvasProjectControls
+        {...createProps()}
+        readOnly
+        latestVersionLabel="v4 · 5 Nov"
+        onOpenLatestVersion={onOpenLatestVersion}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'v4 · 5 Nov' }));
+
+    expect(onOpenLatestVersion).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the label plain text without a version to open', () => {
+    render(
+      <CanvasProjectControls
+        {...createProps()}
+        latestVersionLabel={null}
+        onOpenLatestVersion={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Not published yet' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('latest-version')).toHaveTextContent('Not published yet');
+  });
 });
 
 describe('CanvasProjectControls', () => {

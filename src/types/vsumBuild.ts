@@ -1,3 +1,5 @@
+import type { VsumDetails } from './vsum';
+
 /** Part of the VSUM a build problem was found in. */
 export type BuildProblemSource =
   | 'METAMODEL'
@@ -79,6 +81,22 @@ export interface VsumVersionResponse {
   /** Email of the user who published it. */
   createdBy?: string;
   createdAt?: string;
+}
+
+/**
+ * What a published version looks like on the canvas
+ * (`GET /api/v1/vsums/{id}/versions/latest/content`). The file ids in `project` refer to the
+ * version's own copies, which members can read like any other file of the project.
+ */
+export interface VsumVersionContentResponse {
+  number: number;
+  /** Email of the user who published it. */
+  createdBy?: string;
+  createdAt?: string;
+  /** The project as `GET /api/v1/vsums/{id}/details` returned it when it was published. */
+  project: VsumDetails & { layout?: unknown };
+  /** The project's rule sets at publish time, as `GET /api/v1/vsums/{id}/rule-sets` returns them. */
+  ruleSets: unknown[];
 }
 
 /** Result of the background validation (`GET /api/v1/vsums/{id}/validation`). */
