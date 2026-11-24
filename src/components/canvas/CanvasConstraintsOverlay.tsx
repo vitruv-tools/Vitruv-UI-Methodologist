@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Node } from 'reactflow';
 import { ConstraintsView } from '../constraints/ConstraintsView';
+import { CANVAS_OVERLAY_TOP } from './CanvasProjectControls';
 
 export interface CanvasConstraintsOverlayProps {
   projectId?: number;
@@ -18,7 +19,7 @@ export const CanvasConstraintsOverlay: React.FC<CanvasConstraintsOverlayProps> =
   filterNodeId,
 }) => (
   <div data-testid="canvas-constraints-overlay" style={{
-    position: 'absolute', top: 72, left: 0, right: 0, bottom: 0,
+    position: 'absolute', top: CANVAS_OVERLAY_TOP, left: 0, right: 0, bottom: 0,
     display: visible ? 'flex' : 'none',
     zIndex: 100, pointerEvents: 'none',
   }}>

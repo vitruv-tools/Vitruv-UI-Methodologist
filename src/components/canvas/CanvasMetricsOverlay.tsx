@@ -2,6 +2,7 @@ import React from 'react';
 import type { Edge, Node } from 'reactflow';
 import type { ViewType } from '../../hooks/useViewTypes';
 import { MethodologistMetricsView } from '../metrics/MethodologistMetricsView';
+import { CANVAS_OVERLAY_TOP } from './CanvasProjectControls';
 
 export interface CanvasMetricsOverlayProps {
   projectId?: number;
@@ -26,7 +27,7 @@ export const CanvasMetricsOverlay: React.FC<CanvasMetricsOverlayProps> = ({
     data-testid="canvas-metrics-overlay"
     style={{
       position: 'absolute',
-      top: 72,
+      top: CANVAS_OVERLAY_TOP,
       left: 0,
       right: 0,
       bottom: 0,

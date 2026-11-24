@@ -73,12 +73,12 @@ describe('CanvasConstraintsOverlay', () => {
     });
   });
 
-  it('uses the existing flex overlay layout while visible', () => {
+  it('uses the existing flex overlay layout while visible, starting below the project controls', () => {
     renderOverlay({ visible: true });
 
     expect(screen.getByTestId('canvas-constraints-overlay')).toHaveStyle({
       position: 'absolute',
-      top: '72px',
+      top: '162px',
       left: '0px',
       right: '0px',
       bottom: '0px',

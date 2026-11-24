@@ -72,6 +72,11 @@ describe('CanvasMetricsOverlay', () => {
     expect(apiService.getRuleSets).not.toHaveBeenCalled();
   });
 
+  it('starts below the project controls, so they do not cover the dashboard', () => {
+    renderOverlay({ visible: true });
+    expect(screen.getByTestId('canvas-metrics-overlay')).toHaveStyle({ top: '162px' });
+  });
+
   it('shows the dashboard when visible and loads OCL from existing rule-sets API', async () => {
     renderOverlay({ visible: true });
     expect(screen.getByTestId('canvas-metrics-overlay')).toHaveStyle({ display: 'flex' });
