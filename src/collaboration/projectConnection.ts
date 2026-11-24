@@ -1,4 +1,5 @@
 import { WebsocketProvider } from 'y-websocket';
+import type { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
 import { EPOCH, EPOCH_PARAM, OUTDATED_DOCUMENT_CLOSE_CODE, STATUS, WRITEBACK_ERROR } from './document';
 import { ProjectDocument } from './projectDocument';
@@ -56,6 +57,11 @@ export interface ConnectionSnapshot {
   project: ProjectDocument;
   generation: number;
   failure: ConnectionFailure | null;
+  /**
+   * Live state of the users who are connected, such as their cursors. Nothing in it is saved. It
+   * belongs to the document, so it is replaced together with it.
+   */
+  awareness: Awareness;
 }
 
 export interface ProjectConnection {
@@ -211,6 +217,7 @@ export function createProjectConnection(options: ProjectConnectionOptions): Proj
     previous.stop();
     update({
       project: next.project,
+      awareness: next.provider.awareness,
       generation,
       status: 'connecting',
       synced: false,
@@ -231,6 +238,7 @@ export function createProjectConnection(options: ProjectConnectionOptions): Proj
     synced: false,
     writebackError: null,
     project: first.project,
+    awareness: first.provider.awareness,
     generation: 0,
     failure: null,
   };

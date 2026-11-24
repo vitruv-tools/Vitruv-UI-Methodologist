@@ -93,6 +93,7 @@ import { syncVsumWorkspaceChanges } from '../utils/vsumSyncSave';
 import { canvasCollaborationProps, shownLoadState } from '../collaboration/canvasCollaborationProps';
 import { CollaborationStatus, collaborationStatusProps } from '../components/canvas/CollaborationStatus';
 import { useCanvasCollaboration } from '../collaboration/useCanvasCollaboration';
+import { cursorDisplayName } from '../collaboration/cursorPresence';
 import type { ResolvedMetaModel } from '../collaboration/canvasPort';
 import {
   getCanvasProjectLoadFailureState,
@@ -1763,6 +1764,8 @@ export const CanvasPage: React.FC = () => {
         initialLocked={activeInstanceId ? sessionsRef.current.get(activeInstanceId)?.locked : undefined}
         vsumId={activeProjectId?.toString()}
         {...canvasProps}
+        awareness={collaboration.connection?.awareness ?? null}
+        cursorName={cursorDisplayName({ givenName: user?.givenName, familyName: user?.familyName, username: user?.username })}
         canvasMode={canvasMode}
         onDiagramChange={handleDiagramChange}
         onEcoreFileExpand={handleEcoreFileExpand}

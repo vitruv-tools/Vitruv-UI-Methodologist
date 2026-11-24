@@ -52,6 +52,9 @@ import type { BuildProblem } from '../../types/vsumBuild';
 import { CanvasControls } from './canvas/CanvasControls';
 import { CanvasDropOverlay } from './canvas/CanvasDropOverlay';
 import { CanvasMinimap } from './canvas/CanvasMinimap';
+import { RemoteCursors } from './canvas/RemoteCursors';
+import { useLocalCursor, useRemoteCursors } from '../../collaboration/useCursorPresence';
+import type { Awareness } from 'y-protocols/awareness';
 import { CanvasModeToggle } from './canvas/CanvasModeToggle';
 import { NoNodesSelectionRect } from './canvas/NoNodesSelectionRect';
 import { toggleClassInSelection } from '../canvas/umlClassSelection';
@@ -345,6 +348,10 @@ interface FlowCanvasProps {
    * works on its own.
    */
   collaboration?: CanvasCollaboration;
+  /** Live state of the project's users. With it, the cursors of all users are shown, also when read-only. */
+  awareness?: Awareness | null;
+  /** The name shown with this user's cursor to the others. */
+  cursorName?: string;
   /**
    * Turns undo and redo off. The canvas keeps snapshots of itself, so with collaboration an undo
    * would also undo and bring back what other users did.
@@ -456,6 +463,8 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       buildProblems,
       readOnly = false,
       collaboration,
+      awareness,
+      cursorName = 'User',
       disableUndo = false,
     },
     ref,
@@ -468,6 +477,13 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     const [isDragOver, setIsDragOver] = useState(false);
     const [isInteractive, setIsInteractive] = useState(!readOnly && !initialLocked);
     const editable = !readOnly && isInteractive;
+    const localCursor = useLocalCursor(awareness, cursorName);
+    const remoteCursors = useRemoteCursors(awareness);
+    const handleCursorMove = useCallback((e: React.PointerEvent) => {
+      const instance = reactFlowInstanceRef.current;
+      if (!instance) return;
+      localCursor.move(instance.screenToFlowPosition({ x: e.clientX, y: e.clientY }));
+    }, [localCursor]);
     // Locked with the lock button: nothing may change, not even positions. Read-only viewers are
     // not "locked" - they may still move boxes locally.
     const locked = !readOnly && !isInteractive;
@@ -2247,6 +2263,8 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     return (
       <div
         ref={reactFlowWrapper}
+        onPointerMove={awareness ? handleCursorMove : undefined}
+        onPointerLeave={awareness ? localCursor.leave : undefined}
         style={{
           flexGrow: 1,
           height: '100%',
@@ -2311,6 +2329,8 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           <Background color="var(--v-workspace-dot)" gap={24} size={0.75} />
           {boxSelectionEnabled && <NoNodesSelectionRect />}
         </ReactFlow>
+
+        <RemoteCursors cursors={remoteCursors} viewport={viewport} />
 
         {circleVisible && !umlModalOpen && (
           <CircleOverlay
