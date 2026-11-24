@@ -1,5 +1,4 @@
-import type { Position } from './document';
-import type { ProjectDocument } from './projectDocument';
+import type { ProjectDocument, UndoHistory } from './projectDocument';
 import {
   diffProjectState,
   pairKey,
@@ -82,11 +81,44 @@ export class CanvasSync {
     }
   }
 
+  /** Whether there is something to undo or redo. */
+  history(): UndoHistory {
+    return this.project.history();
+  }
+
+  /** Calls the listener when what can be undone or redone changes. Returns a function that stops it. */
+  onHistoryChange(listener: (history: UndoHistory) => void): () => void {
+    return this.project.onHistoryChange(listener);
+  }
+
+  /**
+   * Takes back the user's last step: only what this user did, never what others did. The canvas
+   * shows it like a change of another user. `false` if there is nothing to undo.
+   */
+  undo(): boolean {
+    return this.step(() => this.project.undo());
+  }
+
+  /** Brings back the step that was taken back last; `false` if there is none. */
+  redo(): boolean {
+    return this.step(() => this.project.redo());
+  }
+
+  /** Goes through the history, after writing what the user changed a moment ago. */
+  private step(change: () => boolean): boolean {
+    if (this.stopped || this.known === undefined) {
+      return false;
+    }
+    this.pushLocalChanges();
+    return change();
+  }
+
   /**
    * Writes what the user changed on the canvas into the document: new metamodels and relations,
-   * renames, moves and reaction files. Mappings and deletions are not part of it.
+   * renames, moves and reaction files. Mappings and deletions are not part of it. While a box is
+   * `dragging`, the positions it passes are part of one undo step with the one where it is let go.
    */
-  pushLocalChanges(): void {
+  pushLocalChanges({ dragging = false }: { dragging?: boolean } = {}): void {
     const known = this.ready('changes');
     if (known === undefined) {
       return;
@@ -103,7 +135,10 @@ export class CanvasSync {
       this.project.renameModel(sourceId, name);
     }
     if (changes.movedModels.length > 0) {
-      this.project.moveModels(new Map(changes.movedModels.map(({ sourceId, position }) => [sourceId, position as Position])));
+      this.project.moveModels(
+        new Map(changes.movedModels.map(({ sourceId, position }) => [sourceId, position])),
+        { dragging },
+      );
     }
     for (const relation of changes.upsertedRelations) {
       this.project.upsertRelation({
@@ -243,5 +278,13 @@ export class CanvasSync {
 /** What the canvas needs from {@link CanvasSync}: to write the user's changes into the project. */
 export type CanvasCollaboration = Pick<
   CanvasSync,
-  'pushLocalChanges' | 'pushMappings' | 'pushReactionLayout' | 'removeModel' | 'removeRelation'
+  | 'pushLocalChanges'
+  | 'pushMappings'
+  | 'pushReactionLayout'
+  | 'removeModel'
+  | 'removeRelation'
+  | 'undo'
+  | 'redo'
+  | 'history'
+  | 'onHistoryChange'
 >;

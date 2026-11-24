@@ -90,12 +90,12 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
     if (error) setError(null);
   };
 
-  const syncFieldValue = (e: React.FormEvent<HTMLInputElement>) => {
+  const syncFieldValue = (e: React.SyntheticEvent<HTMLInputElement>) => {
     const { name, value } = e.currentTarget;
     setCredentials(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!credentials.username.trim() || !credentials.password) {
       setError('Please fill in all fields');
@@ -265,13 +265,18 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
               boxSizing: 'border-box',
             }}
           >
-            <div
-              role="dialog"
+            <dialog
+              open
               aria-modal="true"
               aria-labelledby="forgot-password-title"
               aria-describedby="forgot-password-description"
               style={{
                 pointerEvents: 'auto',
+                position: 'relative',
+                inset: 'auto',
+                margin: 0,
+                border: 'none',
+                color: 'inherit',
                 background: '#ffffff',
                 borderRadius: 14,
                 padding: '28px 32px 24px',
@@ -374,7 +379,7 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
                   {isSendingReset ? 'Sending…' : 'Send instructions'}
                 </button>
               </div>
-            </div>
+            </dialog>
           </div>
         </>,
         document.body,

@@ -27,6 +27,19 @@ import {
  */
 export const LOCAL_ORIGIN = Symbol('canvas');
 
+/** What there is to undo and redo for this user. */
+export interface UndoHistory {
+  canUndo: boolean;
+  canRedo: boolean;
+}
+
+/**
+ * Changes of one undo step are merged as long as the step isn't closed with `stopCapturing()`.
+ * Yjs merges a change into the last step if it comes less than this long after it, and a closed
+ * step counts as having been changed at time 0, so this must stay far below the current time.
+ */
+const MERGE_UNTIL_CLOSED_MS = 1e11;
+
 /** The part of a relation that a user changes. */
 export interface RelationInput {
   sourceId: number;
@@ -47,7 +60,57 @@ export interface RelationInput {
  * writes the project back.
  */
 export class ProjectDocument {
-  constructor(readonly doc: Y.Doc) {}
+  /**
+   * Undoes the user's own changes only: those made with {@link LOCAL_ORIGIN}. What others or the
+   * server did, and what is in the document before the user joins, isn't on its stacks, and a value
+   * that another user changed since is left as it is.
+   */
+  private readonly undoManager: Y.UndoManager;
+  /** The last change was part of a drag that is still going on, so the next one belongs to it. */
+  private stepOpen = false;
+  private readonly historyListeners = new Set<(history: UndoHistory) => void>();
+
+  constructor(readonly doc: Y.Doc) {
+    this.undoManager = new Y.UndoManager([doc.getMap(MODELS), doc.getMap(RELATIONS), doc.getMap(LAYOUT)], {
+      trackedOrigins: new Set([LOCAL_ORIGIN]),
+      captureTimeout: MERGE_UNTIL_CLOSED_MS,
+    });
+    const notify = () => {
+      const history = this.history();
+      for (const listener of this.historyListeners) {
+        listener(history);
+      }
+    };
+    this.undoManager.on('stack-item-added', notify);
+    this.undoManager.on('stack-item-popped', notify);
+    this.undoManager.on('stack-cleared', notify);
+  }
+
+  /** Whether there is something to undo or redo. */
+  history(): UndoHistory {
+    return { canUndo: this.undoManager.undoStack.length > 0, canRedo: this.undoManager.redoStack.length > 0 };
+  }
+
+  /** Calls the listener when what can be undone or redone changes. Returns a function that stops it. */
+  onHistoryChange(listener: (history: UndoHistory) => void): () => void {
+    this.historyListeners.add(listener);
+    return () => this.historyListeners.delete(listener);
+  }
+
+  /**
+   * Takes back the user's last step. Others see it like any other change. Returns `false` if
+   * there is nothing left to undo.
+   */
+  undo(): boolean {
+    this.stepOpen = false;
+    return this.undoManager.undo() !== null;
+  }
+
+  /** Brings back the step that was undone last; `false` if there is none. */
+  redo(): boolean {
+    this.stepOpen = false;
+    return this.undoManager.redo() !== null;
+  }
 
   /**
    * Whether the server has filled the document. Its maps for the layout are created then, never by
@@ -108,13 +171,21 @@ export class ProjectDocument {
     });
   }
 
-  /** Moves metamodels; only positions that differ are written. */
-  moveModels(positions: ReadonlyMap<number, Position>): void {
-    this.write('move metamodels', () => {
-      for (const [sourceId, position] of positions) {
-        this.setPosition(String(sourceId), position);
-      }
-    });
+  /**
+   * Moves metamodels; only positions that differ are written. While `dragging`, the moves are
+   * written as the box moves, and the move that follows them, when the box is let go, is part of
+   * the same undo step.
+   */
+  moveModels(positions: ReadonlyMap<number, Position>, { dragging = false }: { dragging?: boolean } = {}): void {
+    this.write(
+      'move metamodels',
+      () => {
+        for (const [sourceId, position] of positions) {
+          this.setPosition(String(sourceId), position);
+        }
+      },
+      { joinsStep: this.stepOpen, keepsStepOpen: dragging },
+    );
   }
 
   /**
@@ -193,13 +264,24 @@ export class ProjectDocument {
     return { state: previous, stop: () => this.doc.off('update', onUpdate) };
   }
 
-  /** Runs a change as one transaction, unless the document isn't loaded yet. */
-  private write(what: string, change: () => void): void {
+  /**
+   * Runs a change as one transaction, unless the document isn't loaded yet. It is a step of its own
+   * for undo, unless it continues the drag before it (`joinsStep`).
+   */
+  private write(
+    what: string,
+    change: () => void,
+    { joinsStep = false, keepsStepOpen = false }: { joinsStep?: boolean; keepsStepOpen?: boolean } = {},
+  ): void {
     if (!this.isLoaded()) {
       console.warn(`Not able to ${what}: the project is not loaded into the shared document yet.`);
       return;
     }
+    if (!joinsStep) {
+      this.undoManager.stopCapturing();
+    }
     this.doc.transact(change, LOCAL_ORIGIN);
+    this.stepOpen = keepsStepOpen;
   }
 
   private setPosition(key: string, position: Position): void {

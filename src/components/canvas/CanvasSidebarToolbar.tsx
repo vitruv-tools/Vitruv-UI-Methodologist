@@ -12,10 +12,7 @@ interface CanvasSidebarToolbarProps {
   onDownloadJar: () => void;
   onDownloadBundle: () => void;
   onSaveChanges: () => void;
-  /**
-   * Changes are saved automatically through live collaboration. There is no Save then, and no Undo
-   * or Redo until they only undo the user's own changes.
-   */
+  /** Changes are saved automatically through live collaboration, so there is no Save. */
   collaborative?: boolean;
   onCheckBuild: () => void;
   onUndo: () => void;
@@ -142,7 +139,7 @@ const SidebarDivider = () => (
 );
 
 const PlusBoxIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+  <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <line x1="12" y1="7" x2="12" y2="17" />
     <line x1="7" y1="12" x2="17" y2="12" />
   </svg>
@@ -159,40 +156,40 @@ const ToolboxIcon = () => (
 );
 
 const PointerIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+  <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <path d="M4 4l7 18 3-7 7-3z" />
   </svg>
 );
 
 const ReactionIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+  <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <line x1="5" y1="19" x2="19" y2="5" />
     <polyline points="9 5 19 5 19 15" />
   </svg>
 );
 
 const UndoIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+  <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 7h11a5 5 0 0 1 0 10H3" />
     <polyline points="7 3 3 7 7 11" />
   </svg>
 );
 
 const RedoIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+  <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 7H10a5 5 0 0 0 0 10h11" />
     <polyline points="17 3 21 7 17 11" />
   </svg>
 );
 
 const CheckBuildIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+  <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="4 12 9 17 20 6" />
   </svg>
 );
 
 const DownloadIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+  <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <line x1="12" y1="3" x2="12" y2="15" />
     <polyline points="7 10 12 15 17 10" />
     <line x1="4" y1="20" x2="20" y2="20" />
@@ -269,7 +266,7 @@ const DownloadMenuItem: React.FC<{
 };
 
 const SaveIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+  <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="3" width="18" height="18" rx="2" />
     <rect x="8" y="3" width="8" height="6" />
     <rect x="7" y="13" width="10" height="8" />
@@ -445,7 +442,7 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
         )}
       </div>
 
-      {!readOnly && !collaborative && (
+      {!readOnly && (
         <div style={sidebarCardStyle}>
           <SidebarButton
             label="Undo"

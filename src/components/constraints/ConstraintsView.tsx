@@ -612,32 +612,27 @@ const RuleRow: React.FC<{ rule: ConstraintRule; selected: boolean; onClick: () =
     return () => document.removeEventListener('mousedown', close);
   }, [menuOpen]);
 
-  let rowBackground: string;
-  if (selected) { rowBackground = T.primarySoft; }
-  else if (hov) { rowBackground = T.hover; }
-  else { rowBackground = 'transparent'; }
-
   return (
     <div
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
       style={{
         position: 'relative',
-        background: rowBackground,
+        background: selected ? T.primarySoft : 'transparent',
         borderLeft: selected ? '2px solid #049484' : '2px solid transparent',
         transition: 'background 0.1s',
       }}
     >
       <button type="button"
         onClick={onClick}
+        onMouseEnter={() => setHov(true)}
+        onMouseLeave={() => setHov(false)}
         style={{
           display: 'flex', alignItems: 'center', gap: 8, width: '100%',
           padding: '7px 40px 7px 28px',
-          background: 'transparent', border: 'none', cursor: 'pointer',
+          background: !selected && hov ? T.hover : 'transparent', border: 'none', cursor: 'pointer',
           textAlign: 'left', borderRadius: 0,
         }}
       >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={selected ? '#049484' : 'var(--v-text-muted)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+        <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={selected ? '#049484' : 'var(--v-text-muted)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/>
         </svg>
         <span style={{ fontSize: 12.5, color: selected ? '#049484' : T.secondary, fontWeight: selected ? 600 : 400, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -650,13 +645,10 @@ const RuleRow: React.FC<{ rule: ConstraintRule; selected: boolean; onClick: () =
           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: T.muted, borderRadius: 4, display: 'flex', alignItems: 'center' }}
           title="Options"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
         </button>
         {menuOpen && (
           <div
-            tabIndex={-1}
-            onClick={e => e.stopPropagation()}
-            onKeyDown={e => e.stopPropagation()}
             style={{
               position: 'absolute', right: 0, top: '100%', zIndex: 50,
               background: T.surface, border: `1px solid ${T.border}`,
@@ -674,7 +666,7 @@ const RuleRow: React.FC<{ rule: ConstraintRule; selected: boolean; onClick: () =
               onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
               onMouseLeave={e => (e.currentTarget.style.background = 'none')}
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14a2,2,0,0,1-2,2H8a2,2,0,0,1-2-2L5,6"/><path d="M10,11v6"/><path d="M14,11v6"/><path d="M9,6V4a1,1,0,0,1,1-1h4a1,1,0,0,1,1,1v2"/>
               </svg>
               Delete
@@ -700,27 +692,23 @@ interface RuleSetSectionProps {
 const RuleSetSection: React.FC<RuleSetSectionProps> = ({ ruleSet, selectedRuleId, selectedRuleSetId, onRuleClick, onRuleSetClick, onToggleCollapse, onAddRule, onDeleteRule }) => {
   const [hov, setHov] = useState(false);
   const isSelected = selectedRuleSetId === ruleSet.id;
-  let headerBackground: string;
-  if (isSelected) { headerBackground = T.primarySoft; }
-  else if (hov) { headerBackground = T.hover; }
-  else { headerBackground = 'transparent'; }
   return (
     <div>
       <div
-        onMouseEnter={() => setHov(true)}
-        onMouseLeave={() => setHov(false)}
         style={{
           display: 'flex', alignItems: 'center',
-          background: headerBackground,
+          background: isSelected ? T.primarySoft : 'transparent',
           borderLeft: isSelected ? `2px solid ${ruleSet.color}` : '2px solid transparent',
           borderBottom: `1px solid ${T.borderSubtle}`,
         }}
       >
         <button type="button"
           onClick={() => onRuleSetClick(ruleSet)}
+          onMouseEnter={() => setHov(true)}
+          onMouseLeave={() => setHov(false)}
           style={{
             display: 'flex', alignItems: 'center', gap: 8, flex: 1,
-            padding: '8px 4px 8px 12px', background: 'none', border: 'none',
+            padding: '8px 4px 8px 12px', background: !isSelected && hov ? T.hover : 'none', border: 'none',
             cursor: 'pointer', userSelect: 'none', textAlign: 'left',
           }}
         >
@@ -732,7 +720,7 @@ const RuleSetSection: React.FC<RuleSetSectionProps> = ({ ruleSet, selectedRuleId
           onClick={() => onToggleCollapse(ruleSet.id)}
           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px 12px 8px 4px', display: 'flex', alignItems: 'center' }}
         >
-          <svg
+          <svg aria-hidden="true"
             width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--v-text-muted)" strokeWidth="2.5" strokeLinecap="round"
             style={{ transform: ruleSet.collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', flexShrink: 0 }}
           >
@@ -751,7 +739,7 @@ const RuleSetSection: React.FC<RuleSetSectionProps> = ({ ruleSet, selectedRuleId
             onMouseEnter={e => (e.currentTarget.style.color = '#049484')}
             onMouseLeave={e => (e.currentTarget.style.color = T.muted)}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Add rule
           </button>
         </div>
@@ -828,6 +816,11 @@ const ContextClassPicker: React.FC<{
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) searchInputRef.current?.focus();
+  }, [open]);
 
   // Close on outside click
   useEffect(() => {
@@ -866,7 +859,7 @@ const ContextClassPicker: React.FC<{
         onClick={() => { setOpen(o => !o); setQuery(''); }}
       >
         <span style={{ color: value ? T.text : T.muted }}>{value || 'Select context class…'}</span>
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}>
+        <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}>
           <polyline points="6,9 12,15 18,9" />
         </svg>
       </button>
@@ -880,7 +873,7 @@ const ContextClassPicker: React.FC<{
           {/* Search input */}
           <div style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9' }}>
             <input
-              autoFocus
+              ref={searchInputRef}
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="Filter classes…"
@@ -935,7 +928,7 @@ const ContextClassPicker: React.FC<{
 // ── Shared save-feedback components ──────────────────────────────────────────
 
 const SpinnerIcon: React.FC = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ animation: 'spin 0.75s linear infinite' }}>
+  <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ animation: 'spin 0.75s linear infinite' }}>
     <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     <path d="M12 2a10 10 0 0 1 10 10" />
   </svg>
@@ -1120,7 +1113,7 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
             Editing: {draft.name}
           </span>
           <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.muted, padding: 4, borderRadius: 4, display: 'flex', alignItems: 'center' }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
 
@@ -1233,7 +1226,7 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
               />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', padding: '6px 12px', background: T.mutedBg, borderTop: `1px solid ${T.borderSubtle}`, flexShrink: 0, gap: 8 }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="#22c55e" stroke="none"><circle cx="12" cy="12" r="10"/><polyline points="9,12 11,14 15,10" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="#22c55e" stroke="none"><circle cx="12" cy="12" r="10"/><polyline points="9,12 11,14 15,10" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
               <span style={{ fontSize: 11, color: T.muted, flex: 1 }}>No syntax errors</span>
               <span style={{ fontSize: 10.5, color: T.muted }}>Spaces: 2</span>
               <span style={{ fontSize: 10.5, color: T.muted }}>OCL</span>
@@ -1275,7 +1268,7 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
             </div>
             <SaveChangesButton onSave={() => onSave(draft)} />
             <button type="button" onClick={() => setFullEditorOpen(true)} style={{ width: '100%', marginTop: 6, padding: '7px 0', background: 'transparent', color: '#049484', border: '1px solid #049484', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
               Open in Full Editor
             </button>
           </div>
@@ -1377,7 +1370,7 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({ ruleSets, colorMap }) => {
           onClick={() => setDetailOpen(true)}
           style={{ width: '100%', marginTop: 14, padding: '9px 0', background: 'transparent', color: '#049484', border: '1px solid #049484', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
           </svg>
           View Detailed Metrics
@@ -1706,12 +1699,12 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
             onMouseEnter={e => (e.currentTarget.style.background = T.primarySoft)}
             onMouseLeave={e => (e.currentTarget.style.background = 'none')}
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             New Set
           </button>
         </div>
         <div style={{ position: 'relative' }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--v-text-muted)" strokeWidth="2.5" strokeLinecap="round" style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)' }}>
+          <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--v-text-muted)" strokeWidth="2.5" strokeLinecap="round" style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)' }}>
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
           <input
@@ -1726,7 +1719,7 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
       {/* Active metamodel filter badge */}
       {filterMetamodel && (
         <div style={{ padding: '6px 12px', background: '#f0fdf9', borderBottom: '1px solid #d1fae5', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#049484" strokeWidth="2.5" strokeLinecap="round">
+          <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#049484" strokeWidth="2.5" strokeLinecap="round">
             <polygon points="22,3 2,3 10,12.46 10,19 14,21 14,12.46"/>
           </svg>
           <span style={{ fontSize: 11, fontWeight: 600, color: '#049484', flex: 1 }}>Filter: {filterMetamodel}</span>
@@ -1787,6 +1780,7 @@ function findNodeIdForMetamodel(canvasNodes: Node[], metamodel: string): string 
 export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumId, canvasNodes, onHighlightNode, filterNodeId, visible = true }) => {
   const vsumId = _vsumId ? Number(_vsumId) : null;
   const [hasBeenVisible, setHasBeenVisible] = useState(visible);
+  const ruleEditorRef = useRef<HTMLElement>(null);
   if (visible && !hasBeenVisible) setHasBeenVisible(true);
   const colorMap = useMemo(() => buildMetamodelColorMap(canvasNodes), [canvasNodes]);
   const metaClasses = useMemo(() => buildMetaClasses(canvasNodes), [canvasNodes]);
@@ -1821,6 +1815,14 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
   const selectionLockedRef = useRef(false);
   const [selectedRule, setSelectedRule] = useState<ConstraintRule | null>(null);
   const [selectedRuleSet, setSelectedRuleSet] = useState<RuleSet | null>(null);
+
+  useEffect(() => {
+    const editor = ruleEditorRef.current;
+    if (!editor) return;
+    const stopKey = (event: KeyboardEvent) => event.stopPropagation();
+    editor.addEventListener('keydown', stopKey);
+    return () => editor.removeEventListener('keydown', stopKey);
+  }, [selectedRule, hasBeenVisible]);
   const [searchQuery, setSearchQuery] = useState('');
   // Create requests still running, with the newest version of the set to send once they return:
   // the handlers below may run twice (React StrictMode) and users can edit faster than requests.
@@ -2078,7 +2080,7 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
 
       {/* Bottom editor — floats over the center canvas, re-enables pointer events */}
       {selectedRule && hasBeenVisible && (
-        <section aria-label="Rule editor" tabIndex={-1} style={{ position: 'absolute', bottom: 0, left: 260, right: 300, pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }} onKeyDown={e => e.stopPropagation()}>
+        <section ref={ruleEditorRef} aria-label="Rule editor" style={{ position: 'absolute', bottom: 0, left: 260, right: 300, pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }}>
           <EditorPanel
             rule={selectedRule}
             ruleSets={ruleSets}

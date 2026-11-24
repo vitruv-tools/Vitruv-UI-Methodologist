@@ -109,6 +109,7 @@ import {
 } from './flowCanvasRenderProps';
 import type { Position as SharedPosition } from '../../collaboration/document';
 import type { CanvasCollaboration } from '../../collaboration/canvasSync';
+import type { UndoHistory } from '../../collaboration/projectDocument';
 import {
   metaModelDocumentId,
   moveMetaModelBoxes,
@@ -362,6 +363,8 @@ function keywordsFromEcoreNodeData(data: { keywords?: unknown } | undefined): st
   return [];
 }
 
+const NO_HISTORY: UndoHistory = { canUndo: false, canRedo: false };
+
 function numberOrUndefined(value: unknown): number | undefined {
   return typeof value === 'number' ? value : undefined;
 }
@@ -547,21 +550,6 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       establishBaseline,
     } = useFlowState();
 
-    const canUndo = flowCanUndo && !disableUndo;
-    const canRedo = flowCanRedo && !disableUndo;
-
-    const undo = useCallback(() => {
-      if (disableUndo) return;
-      const restored = undoFlow();
-      if (restored) syncFineGranularStoreFromCanvas(restored.nodes, restored.edges);
-    }, [undoFlow, disableUndo]);
-
-    const redo = useCallback(() => {
-      if (disableUndo) return;
-      const restored = redoFlow();
-      if (restored) syncFineGranularStoreFromCanvas(restored.nodes, restored.edges);
-    }, [redoFlow, disableUndo]);
-
     const nodesRef = useRef(nodes);
     nodesRef.current = nodes;
     const edgesRef = useRef(edges);
@@ -572,6 +560,39 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     const collaborationRef = useRef(collaboration);
     collaborationRef.current = collaboration;
     const writesToProject = collaboration !== undefined && !readOnly;
+
+    // ── Undo and redo ─────────────────────────────────────────────────────────
+
+    // With the shared project, undo takes back the user's own changes in the project, never those of
+    // others. Without it, the canvas goes back to an older snapshot of itself.
+    const [sharedHistory, setSharedHistory] = useState<UndoHistory>(NO_HISTORY);
+    useEffect(() => {
+      if (!writesToProject || !collaboration) {
+        setSharedHistory(NO_HISTORY);
+        return undefined;
+      }
+      setSharedHistory(collaboration.history());
+      return collaboration.onHistoryChange(setSharedHistory);
+    }, [writesToProject, collaboration]);
+
+    const { canUndo, canRedo } = writesToProject
+      ? sharedHistory
+      : { canUndo: flowCanUndo && !disableUndo, canRedo: flowCanRedo && !disableUndo };
+
+    const stepHistory = useCallback(
+      (direction: 'undo' | 'redo') => {
+        if (writesToProject) {
+          collaborationRef.current?.[direction]();
+          return;
+        }
+        if (disableUndo) return;
+        const restored = direction === 'undo' ? undoFlow() : redoFlow();
+        if (restored) syncFineGranularStoreFromCanvas(restored.nodes, restored.edges);
+      },
+      [undoFlow, redoFlow, disableUndo, writesToProject],
+    );
+    const undo = useCallback(() => stepHistory('undo'), [stepHistory]);
+    const redo = useCallback(() => stepHistory('redo'), [stepHistory]);
 
     // What the shared project cares about on the canvas. The user's changes are written when this
     // changes and the canvas has been still for a moment, e.g. when a drag has ended.
@@ -601,7 +622,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         : COLLABORATION_PUSH_DELAY_MS;
       const timer = globalThis.setTimeout(() => {
         lastPushRef.current = Date.now();
-        collaborationRef.current?.pushLocalChanges();
+        collaborationRef.current?.pushLocalChanges({ dragging: boxDragged });
       }, wait);
       return () => globalThis.clearTimeout(timer);
     }, [writesToProject, sharedStateKey, collaboration, boxDragged]);

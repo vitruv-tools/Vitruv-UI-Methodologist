@@ -182,6 +182,15 @@ describe('EcoreFileBox (real) – rename', () => {
     return screen.getByLabelText('Rename metamodel');
   };
 
+  it('starts from the name the box shows, which is not the file name once someone renamed it', () => {
+    renderBox({ displayName: 'Garden Shop' });
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: /garden shop/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+
+    expect(screen.getByLabelText('Rename metamodel')).toHaveValue('Garden Shop');
+  });
+
   it('lets Space type into the name and saves on Enter', () => {
     const { onRename, onSelect, onExpand } = renderBox();
     const input = startRename();

@@ -470,6 +470,12 @@ const ClassBoxNameSection = ({
   const nameEditable = selected && !multiSelected;
   const isAbstractOrIface = cls.isAbstract || cls.isInterface;
   const isEditingThisName = edit?.kind === 'name' && edit.classId === cls.id;
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditingThisName) nameInputRef.current?.focus();
+  }, [isEditingThisName]);
+
   const stereotypeLabel = cls.isInterface ? 'interface' : 'abstract';
   const nameFontStyle = cls.isAbstract ? 'italic' : 'normal';
   const nameSectionBackground = getClassBoxNameSectionBackground(
@@ -519,7 +525,7 @@ const ClassBoxNameSection = ({
       >
         {stereotype}
         <input
-          autoFocus
+          ref={nameInputRef}
           value={edit.val}
           onChange={event => onEditChange({
             ...edit,

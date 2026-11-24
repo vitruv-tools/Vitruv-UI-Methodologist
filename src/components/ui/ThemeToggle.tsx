@@ -48,12 +48,13 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
     ];
 
     return (
-      <div
-        role="group"
+      <fieldset
         aria-label="Color theme"
         style={{
           display: 'flex',
           width: '100%',
+          margin: 0,
+          minWidth: 0,
           padding: 3,
           borderRadius: 8,
           background: tone === 'onDark' ? 'rgba(255,255,255,0.06)' : 'var(--v-surface-muted)',
@@ -91,7 +92,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
             </button>
           );
         })}
-      </div>
+      </fieldset>
     );
   }
 

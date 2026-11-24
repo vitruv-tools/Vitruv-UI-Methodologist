@@ -293,7 +293,7 @@ async function loadOpenCanvasTab(
   nextId: string,
   cancelled: boolean,
   openTabs: OpenCanvasTab[],
-  loadingTabRef: React.MutableRefObject<string | null>,
+  loadingTabRef: React.RefObject<string | null>,
   clearCanvasWorkspace: () => void,
   loadVsum: (vsumId: number, forInstanceId?: string) => Promise<void>,
 ): Promise<void> {

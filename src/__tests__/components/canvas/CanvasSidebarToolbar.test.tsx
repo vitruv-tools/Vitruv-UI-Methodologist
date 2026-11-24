@@ -69,7 +69,7 @@ describe('CanvasSidebarToolbar', () => {
     expect(props.onToggleModelDrawer).toHaveBeenCalledTimes(1);
   });
 
-  it('has no Save and no Undo or Redo when changes are saved automatically through collaboration', () => {
+  it('has no Save when changes are saved automatically through collaboration, but keeps Undo and Redo', () => {
     render(<CanvasSidebarToolbar {...createProps()} collaborative />);
 
     expect(screen.getAllByRole('button').map(button => button.getAttribute('aria-label'))).toEqual([
@@ -77,7 +77,27 @@ describe('CanvasSidebarToolbar', () => {
       labels.download,
       labels.checkBuild,
       labels.addMetaModels,
+      labels.undoAvailable,
+      labels.redoAvailable,
     ]);
+  });
+
+  it('undoes and redoes through collaboration too', () => {
+    const props = createProps();
+    render(<CanvasSidebarToolbar {...props} collaborative />);
+
+    fireEvent.click(screen.getByRole('button', { name: labels.undoAvailable }));
+    fireEvent.click(screen.getByRole('button', { name: labels.redoAvailable }));
+
+    expect(props.onUndo).toHaveBeenCalledTimes(1);
+    expect(props.onRedo).toHaveBeenCalledTimes(1);
+  });
+
+  it('has no Undo or Redo for a viewer, with collaboration too', () => {
+    render(<CanvasSidebarToolbar {...createProps()} collaborative readOnly />);
+
+    expect(screen.queryByRole('button', { name: labels.undoAvailable })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: labels.redoAvailable })).not.toBeInTheDocument();
   });
 
   it('keeps Save, Undo and Redo without collaboration', () => {

@@ -183,7 +183,7 @@ export function CodeEditorModal({
     if (isOpen && onInitialize && !readOnly) {
       const result = onInitialize(initialCode);
       if (result instanceof Promise) {
-        result.catch((err: unknown) => {
+        void result.catch((err: unknown) => {
           console.error('Failed to initialize file:', err);
         });
       }
