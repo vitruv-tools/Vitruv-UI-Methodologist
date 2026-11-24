@@ -169,8 +169,8 @@ export class CursorPresence {
     const wait = this.lastSent + this.throttleMs - Date.now();
     if (wait <= 0) {
       this.flush();
-    } else if (this.timer === undefined) {
-      this.timer = setTimeout(() => this.flush(), wait);
+    } else {
+      this.timer ??= setTimeout(() => this.flush(), wait);
     }
   }
 
