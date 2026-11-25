@@ -1,4 +1,5 @@
-import { computeInitialCircle, clampToCircle, clampAllNodesToCircle } from '../../hooks/useCircleContainment';
+import { renderHook } from '@testing-library/react';
+import { computeInitialCircle, clampToCircle, clampAllNodesToCircle, useCircleContainment } from '../../hooks/useCircleContainment';
 
 const nodeSize = { width: 280, height: 180 };
 
@@ -96,3 +97,39 @@ describe('clampAllNodesToCircle', () => {
         expect(result.size).toBe(0);
     });
 });
+describe('useCircleContainment', () => {
+    const ecore = (id: string, x: number, y: number) => ({ id, type: 'ecoreFile', position: { x, y }, data: {} }) as any;
+    const start = { cx: 0, cy: 0, r: 400 };
+
+    function render(options = {}) {
+        const hook = renderHook(({ nodes }) => useCircleContainment(nodes, options), {
+            initialProps: { nodes: [ecore('a', -140, -90)] },
+        });
+        hook.rerender({ nodes: [ecore('a', -140, -90)] });
+        return hook;
+    }
+
+    it('keeps the circle when a box is added inside it', () => {
+        const onRecompute = vi.fn();
+        const hook = renderHook(({ nodes }) => useCircleContainment(nodes, { onRecompute }), {
+            initialProps: { nodes: [] as any[] },
+        });
+        hook.result.current[1](start);
+        hook.rerender({ nodes: [ecore('a', -140, -90)] });
+
+        expect(hook.result.current[0]).toEqual(start);
+        expect(onRecompute).not.toHaveBeenCalled();
+    });
+
+    it('recomputes the circle when an added box is outside it, and reports it', () => {
+        const onRecompute = vi.fn();
+        const hook = render({ onRecompute });
+        const nodes = [ecore('a', -140, -90), ecore('b', 3000, 0)];
+
+        hook.rerender({ nodes });
+
+        expect(hook.result.current[0]).toEqual(computeInitialCircle(nodes));
+        expect(onRecompute).toHaveBeenCalledWith(computeInitialCircle(nodes));
+    });
+});
+

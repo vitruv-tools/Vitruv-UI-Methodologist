@@ -9,7 +9,7 @@
  * models     metaModelId → { name, softDeleted, softDeletedVia }
  * relations  key → { backendId, sourceId, targetId, reactionFileId, fineGranular, softDeleted, softDeletedVia }
  * views      key → { backendId, name, description, fileStorageId, metaModelIds, softDeleted, softDeletedVia }
- * layout     { metaModels: metaModelId → { x, y }, reactions: …, other stored keys }
+ * layout     { metaModels: metaModelId → { x, y }, reactions: …, vsumCircle: { cx, cy, r }, other stored keys }
  * status     { writebackError, epoch }
  * ```
  *
@@ -40,6 +40,11 @@ export const STATUS = 'status';
 export const LAYOUT_META_MODELS = 'metaModels';
 /** Map in {@link LAYOUT} with the reaction layouts. */
 export const LAYOUT_REACTIONS = 'reactions';
+/**
+ * Plain value in {@link LAYOUT} with the VSUM circle ({@link VsumCircle}) in canvas coordinates. A
+ * client writes it; the server keeps it like any other stored layout key.
+ */
+export const LAYOUT_VSUM_CIRCLE = 'vsumCircle';
 /** Field of {@link STATUS} with the reason of the last failed writeback, `null` if it succeeded. */
 export const WRITEBACK_ERROR = 'writebackError';
 /** Field of {@link STATUS} that identifies the room the document belongs to. */
@@ -87,6 +92,13 @@ export interface RelationFields extends SoftDeletable {
 export interface Position {
   x: number;
   y: number;
+}
+
+/** The VSUM circle the metamodels are kept in, in canvas coordinates; the same for all users. */
+export interface VsumCircle {
+  cx: number;
+  cy: number;
+  r: number;
 }
 
 /** The values `softDeleted` and `softDeletedVia` of an element that isn't deleted. */

@@ -3,11 +3,13 @@ import {
   LAYOUT,
   LAYOUT_META_MODELS,
   LAYOUT_REACTIONS,
+  LAYOUT_VSUM_CIRCLE,
   MODELS,
   RELATIONS,
   type ModelFields,
   type Position,
   type RelationFields,
+  type VsumCircle,
 } from './document';
 
 /** A metamodel of the project as the document has it. */
@@ -39,6 +41,8 @@ export interface ProjectState {
   relations: Map<string, RelationState>;
   /** Layout of the reaction editor, keyed by what the editor uses; the document doesn't interpret it. */
   reactionLayout: Record<string, unknown>;
+  /** The shared VSUM circle; `null` if the document has none (yet). */
+  vsumCircle: VsumCircle | null;
 }
 
 /** What changed between two states, to be applied to the canvas. */
@@ -52,6 +56,8 @@ export interface ProjectChanges {
   removedRelations: { sourceId: number; targetId: number }[];
   /** The new reaction layout if it changed, otherwise `undefined`. */
   reactionLayout: Record<string, unknown> | undefined;
+  /** The new VSUM circle if it changed, otherwise `undefined`. A circle that is removed isn't a change. */
+  vsumCircle: VsumCircle | undefined;
 }
 
 /** The key of the relation from one metamodel to another. */
@@ -67,7 +73,8 @@ export function hasChanges(changes: ProjectChanges): boolean {
     changes.movedModels.length > 0 ||
     changes.upsertedRelations.length > 0 ||
     changes.removedRelations.length > 0 ||
-    changes.reactionLayout !== undefined
+    changes.reactionLayout !== undefined ||
+    changes.vsumCircle !== undefined
   );
 }
 
@@ -83,6 +90,7 @@ export function readProjectState(doc: Y.Doc): ProjectState {
     models,
     relations: readRelations(doc, models),
     reactionLayout: reactions instanceof Y.Map ? (reactions.toJSON() as Record<string, unknown>) : {},
+    vsumCircle: toVsumCircle(layout.get(LAYOUT_VSUM_CIRCLE)),
   };
 }
 
@@ -166,6 +174,8 @@ export function diffProjectState(
     ...diffRelations(previous.relations, next.relations, compareMappings),
     reactionLayout:
       canonicalJson(previous.reactionLayout) === canonicalJson(next.reactionLayout) ? undefined : next.reactionLayout,
+    vsumCircle:
+      next.vsumCircle === null || isSameVsumCircle(previous.vsumCircle, next.vsumCircle) ? undefined : next.vsumCircle,
   };
 }
 
@@ -238,6 +248,18 @@ function toPosition(value: unknown): Position | null {
     return null;
   }
   return { x: value.x, y: value.y };
+}
+
+/** The VSUM circle in a value of the document, or `null` if it isn't one. */
+function toVsumCircle(value: unknown): VsumCircle | null {
+  if (!isObject(value) || !isFiniteNumber(value.cx) || !isFiniteNumber(value.cy) || !isFiniteNumber(value.r) || value.r <= 0) {
+    return null;
+  }
+  return { cx: value.cx, cy: value.cy, r: value.r };
+}
+
+export function isSameVsumCircle(a: VsumCircle | null, b: VsumCircle | null): boolean {
+  return a === b || (a !== null && b !== null && a.cx === b.cx && a.cy === b.cy && a.r === b.r);
 }
 
 function isFiniteNumber(value: unknown): value is number {

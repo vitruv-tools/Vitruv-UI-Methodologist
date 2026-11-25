@@ -20,6 +20,7 @@ export type CanvasHandle = Pick<
   | 'setEcorePositions'
   | 'upsertReactionRelation'
   | 'removeReactionRelation'
+  | 'setVsumCircle'
 >;
 
 /** A metamodel with its ecore file, ready to be put on the canvas. */
@@ -65,7 +66,7 @@ export function createCanvasPort(deps: CanvasPortDeps): CanvasPort {
     read(): ProjectState {
       const canvas = deps.getCanvas();
       if (canvas === null) {
-        return { models: new Map(), relations: new Map(), reactionLayout: {} };
+        return { models: new Map(), relations: new Map(), reactionLayout: {}, vsumCircle: null };
       }
       return projectCanvasState({
         nodes: canvas.getNodes(),
@@ -115,6 +116,13 @@ export function createCanvasPort(deps: CanvasPortDeps): CanvasPort {
       if (changes.reactionLayout !== undefined) {
         deps.saveReactionLayout(changes.reactionLayout);
       }
+      if (changes.vsumCircle !== undefined) {
+        canvas.setVsumCircle(changes.vsumCircle, true);
+      }
+    },
+
+    showVsumCircle(circle, confirmed): void {
+      deps.getCanvas()?.setVsumCircle(circle, confirmed);
     },
   };
 

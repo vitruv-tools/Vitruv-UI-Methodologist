@@ -1,4 +1,6 @@
 // EcoreFileBox collision helpers — shared by layout and drag clamping.
+import { Circle, clampToCircle } from '../../hooks/useCircleContainment';
+
 export const ECORE_W = 118;
 export const ECORE_H = 126;
 export const ECORE_GAP = 20;
@@ -68,4 +70,44 @@ export function findFreeEcorePosition(
   if (spiralPosition) return spiralPosition;
 
   return { x: startX, y: startY + existingNodes.length * (ECORE_H + ECORE_GAP) };
+}
+
+/** How far, in flow units, a position may be off and still count as inside the circle. */
+const CIRCLE_FIT_TOLERANCE = 0.5;
+
+function fitsInCircle(position: { x: number; y: number }, circle: Circle): boolean {
+  const clamped = clampToCircle(position, circle);
+  return Math.abs(clamped.x - position.x) <= CIRCLE_FIT_TOLERANCE
+    && Math.abs(clamped.y - position.y) <= CIRCLE_FIT_TOLERANCE;
+}
+
+/**
+ * A free position for a new box that lies inside the VSUM circle (with the size the circle checks
+ * boxes with), as close to `preferred` as possible; the circle's centre if there is no preferred
+ * position. `null` if the circle has no free place, so that the caller falls back to
+ * {@link findFreeEcorePosition} and the circle grows.
+ */
+export function findFreeEcorePositionInCircle(
+  existingNodes: { position: { x: number; y: number } }[],
+  circle: Circle,
+  preferred?: { x: number; y: number },
+): { x: number; y: number } | null {
+  // Without a preferred position, the box (280×180, as the circle checks it) is centred in the circle.
+  const start = clampToCircle(preferred ?? { x: circle.cx - 140, y: circle.cy - 90 }, circle);
+  const isUsable = (x: number, y: number) =>
+    fitsInCircle({ x, y }, circle) && isEcorePositionFree(x, y, existingNodes);
+  if (isUsable(start.x, start.y)) return { x: start.x, y: start.y };
+
+  const step = ECORE_W + ECORE_GAP;
+  for (let ring = 1; ring * step <= 2 * circle.r; ring++) {
+    for (let dx = -ring; dx <= ring; dx++) {
+      for (let dy = -ring; dy <= ring; dy++) {
+        if (Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
+        const x = start.x + dx * step;
+        const y = start.y + dy * step;
+        if (isUsable(x, y)) return { x, y };
+      }
+    }
+  }
+  return null;
 }
