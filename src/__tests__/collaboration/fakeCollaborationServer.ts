@@ -2,12 +2,14 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import * as decoding from 'lib0/decoding';
 import * as encoding from 'lib0/encoding';
+import * as awarenessProtocol from 'y-protocols/awareness';
 import * as syncProtocol from 'y-protocols/sync';
 import { WebSocketServer, type WebSocket as ServerSocket } from 'ws';
 import * as Y from 'yjs';
 import { EPOCH, EPOCH_PARAM, OUTDATED_DOCUMENT_CLOSE_CODE, STATUS } from '../../collaboration/document';
 
 const MESSAGE_SYNC = 0;
+const MESSAGE_AWARENESS = 1;
 
 /** A connection attempt as the server saw it. */
 export interface Connection {
@@ -46,6 +48,8 @@ export async function startFakeCollaborationServer(
 ): Promise<FakeCollaborationServer> {
   const rooms = new Map<string, Y.Doc>(Object.entries(initialRooms));
   const clients = new Set<ServerSocket>();
+  /** Awareness is relayed between the clients of a room, like y-websocket's server does; it isn't saved. */
+  const awarenesses = new Map<Y.Doc, awarenessProtocol.Awareness>();
   const connections: Connection[] = [];
   const state: { acceptedTokens: Set<string> | undefined; forceOutdated: boolean } = {
     acceptedTokens: undefined,
@@ -82,6 +86,29 @@ export async function startFakeCollaborationServer(
 
   function join(doc: Y.Doc, webSocket: ServerSocket): void {
     clients.add(webSocket);
+    let awareness = awarenesses.get(doc);
+    if (awareness === undefined) {
+      awareness = new awarenessProtocol.Awareness(doc);
+      awareness.setLocalState(null);
+      awarenesses.set(doc, awareness);
+    }
+    const roomAwareness = awareness;
+    const controlled = new Set<number>();
+    const sendAwareness = ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }, origin: unknown) => {
+      if (origin === webSocket) {
+        // Remember which clients this connection speaks for, to remove them when it closes.
+        added.forEach((id) => controlled.add(id));
+        removed.forEach((id) => controlled.delete(id));
+      }
+      const encoder = encoding.createEncoder();
+      encoding.writeVarUint(encoder, MESSAGE_AWARENESS);
+      encoding.writeVarUint8Array(
+        encoder,
+        awarenessProtocol.encodeAwarenessUpdate(roomAwareness, [...added, ...updated, ...removed]),
+      );
+      webSocket.send(encoding.toUint8Array(encoder));
+    };
+    roomAwareness.on('update', sendAwareness);
     const sendUpdate = (update: Uint8Array, origin: unknown) => {
       if (origin === webSocket) {
         return;
@@ -95,11 +122,18 @@ export async function startFakeCollaborationServer(
     webSocket.on('close', () => {
       clients.delete(webSocket);
       doc.off('update', sendUpdate);
+      roomAwareness.off('update', sendAwareness);
+      awarenessProtocol.removeAwarenessStates(roomAwareness, [...controlled], null);
     });
     webSocket.on('message', (data: Buffer) => {
       const decoder = decoding.createDecoder(new Uint8Array(data));
-      if (decoding.readVarUint(decoder) !== MESSAGE_SYNC) {
-        return; // awareness and the rest aren't needed here
+      const type = decoding.readVarUint(decoder);
+      if (type === MESSAGE_AWARENESS) {
+        awarenessProtocol.applyAwarenessUpdate(roomAwareness, decoding.readVarUint8Array(decoder), webSocket);
+        return;
+      }
+      if (type !== MESSAGE_SYNC) {
+        return;
       }
       const encoder = encoding.createEncoder();
       encoding.writeVarUint(encoder, MESSAGE_SYNC);

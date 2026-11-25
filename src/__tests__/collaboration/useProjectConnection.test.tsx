@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import type { ConnectionSnapshot, ProjectConnection, ProjectConnectionOptions } from '../../collaboration/projectConnection';
 import { useProjectConnection } from '../../collaboration/useProjectConnection';
 import { ProjectDocument } from '../../collaboration/projectDocument';
+import { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
 
 /** A connection that does nothing but report what it is told. */
@@ -14,6 +15,7 @@ function fakeConnection() {
     project: new ProjectDocument(new Y.Doc()),
     generation: 0,
     failure: null,
+    awareness: new Awareness(new Y.Doc()),
   };
   const connection: ProjectConnection & { destroyed: boolean; change(changes: Partial<ConnectionSnapshot>): void } = {
     destroyed: false,
