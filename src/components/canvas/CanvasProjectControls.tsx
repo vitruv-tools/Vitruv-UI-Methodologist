@@ -31,6 +31,8 @@ interface CanvasProjectControlsProps {
   publishing?: boolean;
   /** Label of the latest published version, e.g. "v4 · 5 Nov"; "Not published yet" when null. */
   latestVersionLabel?: string | null;
+  /** Opens the latest published version read-only; the label is a button only with a version. */
+  onOpenLatestVersion?: () => void;
 }
 
 /** "v4 · 5 Nov" for a published version, or null without one. */
@@ -44,6 +46,14 @@ export function formatVersionLabel(
   const day = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
   return `v${version.number} · ${day}`;
 }
+
+const latestVersionStyle: React.CSSProperties = {
+  marginLeft: 6,
+  fontSize: 11,
+  fontWeight: 600,
+  color: 'var(--v-text-muted)',
+  whiteSpace: 'nowrap',
+};
 
 const projectControlsStyle: React.CSSProperties = {
   position: 'absolute',
@@ -172,6 +182,7 @@ export const CanvasProjectControls: React.FC<CanvasProjectControlsProps> = ({
   onPublish,
   publishing = false,
   latestVersionLabel,
+  onOpenLatestVersion,
 }) => (
   <div style={projectControlsStyle}>
     <button
@@ -311,19 +322,29 @@ export const CanvasProjectControls: React.FC<CanvasProjectControlsProps> = ({
     )}
 
     {latestVersionLabel !== undefined && (
-      <span
-        data-testid="latest-version"
-        title="Latest published version"
-        style={{
-          marginLeft: 6,
-          fontSize: 11,
-          fontWeight: 600,
-          color: 'var(--v-text-muted)',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {latestVersionLabel ?? 'Not published yet'}
-      </span>
+      latestVersionLabel !== null && onOpenLatestVersion ? (
+        <button
+          type="button"
+          data-testid="latest-version"
+          onClick={onOpenLatestVersion}
+          title="Open the latest published version (read-only)"
+          style={{
+            ...latestVersionStyle,
+            padding: 0,
+            border: 'none',
+            background: 'none',
+            cursor: 'pointer',
+            textDecoration: 'underline',
+            fontFamily: 'inherit',
+          }}
+        >
+          {latestVersionLabel}
+        </button>
+      ) : (
+        <span data-testid="latest-version" title="Latest published version" style={latestVersionStyle}>
+          {latestVersionLabel ?? 'Not published yet'}
+        </span>
+      )
     )}
 
     {!readOnly && onPublish && (

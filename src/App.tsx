@@ -7,6 +7,7 @@ import { OtpVerificationPage } from './pages/OtpVerificationPage';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 // useAuth is used in ProtectedRoute
 import { CanvasPage } from './pages/CanvasPage';
+import { PublishedVersionPage } from './pages/PublishedVersionPage';
 import { MODEL_LIBRARY_PATH } from './constants/routes';
 import './App.css';
 
@@ -63,6 +64,11 @@ function App() {
           <Route path="/canvas/:id" element={
             <ProtectedRoute>
               <CanvasPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/canvas/:id/published" element={
+            <ProtectedRoute>
+              <PublishedVersionPage />
             </ProtectedRoute>
           } />
           <Route path="/mml" element={<Navigate to="/" replace />} />

@@ -263,11 +263,12 @@ describe('UtilityMethodEditor', () => {
     expect(await screen.findByText('Line 1, column 7: The method contians is undefined')).toBeInTheDocument();
     expect(screen.getByText('Xtend body')).toBeInTheDocument();
     expect(api.previewUtilityMethod).toHaveBeenCalledWith(7, expect.objectContaining({ name: 'broken' }), 2);
-    expect(mockSetModelMarkers).toHaveBeenLastCalledWith(
+    // The markers are set by an effect that can run just after the problem text is shown.
+    await waitFor(() => expect(mockSetModelMarkers).toHaveBeenLastCalledWith(
       expect.anything(),
       'utilityMethod',
       [expect.objectContaining({ severity: 8, startLineNumber: 1, startColumn: 7, endColumn: 15, message: 'The method contians is undefined' })],
-    );
+    ));
     expect(screen.getByRole('button', { name: 'Save Utility Method' })).toBeEnabled();
     expect(screen.getByText('Fix the problems shown in the preview.')).toBeInTheDocument();
   });
@@ -285,11 +286,11 @@ describe('UtilityMethodEditor', () => {
 
     expect(await screen.findByText('Compiles to Java')).toBeInTheDocument();
     expect(screen.getByText(/Warning: Line 1, column 5/)).toBeInTheDocument();
-    expect(mockSetModelMarkers).toHaveBeenLastCalledWith(
+    await waitFor(() => expect(mockSetModelMarkers).toHaveBeenLastCalledWith(
       expect.anything(),
       'utilityMethod',
       [expect.objectContaining({ severity: 4 })],
-    );
+    ));
     expect(screen.getByText('Ready to save.')).toBeInTheDocument();
   });
 

@@ -8,7 +8,7 @@ import { DrawerModel } from '../components/canvas/ModelDrawer';
 import { ModelDrawerModal } from '../components/canvas/ModelDrawerModal';
 import { CanvasUmlPanelLayer } from '../components/canvas/CanvasUmlPanelLayer';
 import { apiService, VsumRole, VsumUserResponse } from '../services/api';
-import type { EditableVsumDetails, VsumDetails, VsumMetaModelRef } from '../types';
+import type { EditableVsumDetails, VsumDetails } from '../types';
 import { appendMetaModelVersion } from '../utils/metaModelVersion';
 import { useProjectStore } from '../store/Project';
 import { findProjectMetaModel } from '../collaboration/findProjectMetaModel';
@@ -77,10 +77,11 @@ import {
   type SharedByContact,
 } from '../utils/vsumMemberUtils';
 import { waitForMetaModelsOnCanvas } from '../utils/canvasLoadUtils';
+import { dispatchMetaModelRelations, dispatchWorkspaceMetaModels } from '../utils/canvasWorkspaceLoad';
+import { publishedVersionPath } from '../utils/publishedVersion';
 import {
   cloneWorkspaceSnapshot,
   emptyWorkspaceSnapshot,
-  mapRelationsForCanvasLoad,
   mapVsumDetailsToEditable,
   mergePersistedFineRelationIds,
   prepareSnapshotForSyncSave,
@@ -124,51 +125,10 @@ function clearVsumTabSessions(
   }
 }
 
-async function dispatchWorkspaceMetaModel(model: VsumMetaModelRef): Promise<void> {
-  if (!model.ecoreFileId) return;
-  try {
-    const fileContent = await apiService.getFile(model.ecoreFileId);
-    globalThis.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
-      detail: {
-        fileContent,
-        fileName: `${appendMetaModelVersion(model.name, model.version)}.ecore`,
-        displayName: model.name,
-        version: model.version,
-        description: model.description,
-        keywords: model.keyword?.join(', '),
-        domain: model.domain,
-        createdAt: model.createdAt,
-        metaModelId: model.id,
-        metaModelSourceId: model.sourceId ?? model.id,
-        ecoreFileId: model.ecoreFileId,
-        genModelFileId: model.genModelFileId,
-        fromServerLoad: true,
-      },
-    }));
-    await new Promise(r => setTimeout(r, 50));
-  } catch {
-    // model without readable ecore file – skip canvas box
-  }
-}
-
-async function dispatchWorkspaceMetaModels(metaModels: VsumMetaModelRef[]): Promise<void> {
-  await metaModels.reduce(
-    (previous, model) => previous.then(() => dispatchWorkspaceMetaModel(model)),
-    Promise.resolve(),
-  );
-}
-
-async function dispatchMetaModelRelations(
-  relations: VsumDetails['metaModelsRelation'],
-): Promise<void> {
-  if (!relations?.length) return;
-  globalThis.dispatchEvent(new CustomEvent('vitruv.loadMetaModelRelations', {
-    detail: {
-      relations: mapRelationsForCanvasLoad(relations),
-      preserveExisting: false,
-    },
-  }));
-  await new Promise(r => setTimeout(r, 150));
+/** Opens the latest published version of the project read-only, in a new browser tab. */
+function openPublishedVersion(projectId: number | null | undefined): void {
+  if (projectId == null) return;
+  globalThis.open(publishedVersionPath(projectId), '_blank', 'noopener');
 }
 
 function finalizeVsumTabBaseline(
@@ -603,6 +563,8 @@ export const CanvasPage: React.FC = () => {
     onNotify: showPopup,
     onFailure: showBuildFailure,
   });
+  // The version label is only a button while there is a published version.
+  const openLatestVersion = useCallback(() => openPublishedVersion(activeProjectId), [activeProjectId]);
 
   const displayProjectSharer = React.useMemo(() => {
     if (projectSharer) return projectSharer;
@@ -1906,6 +1868,7 @@ export const CanvasPage: React.FC = () => {
         onPublish={() => { void publish(); }}
         publishing={publishing}
         latestVersionLabel={formatVersionLabel(latestVersion)}
+        onOpenLatestVersion={openLatestVersion}
       />
 
       <UnsavedTabCloseDialog
