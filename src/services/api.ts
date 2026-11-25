@@ -2,7 +2,12 @@ import { AuthService } from './auth';
 import { FlowData } from '../types/flow';
 import { ApiResponse, Vsum, VsumDetails } from '../types/vsum';
 import { config } from '../config/environment';
-import type { VsumBuildResponse, VsumValidationResponse, VsumVersionResponse } from '../types/vsumBuild';
+import type {
+  VsumBuildResponse,
+  VsumValidationResponse,
+  VsumVersionContentResponse,
+  VsumVersionResponse,
+} from '../types/vsumBuild';
 
 class ApiService {
   private readonly baseURL = config.apiBaseUrl;
@@ -694,6 +699,23 @@ class ApiService {
       );
       const version = res?.data;
       return version?.buildId == null || version.number == null ? null : version;
+    } catch (error) {
+      if ((error as { status?: number } | null)?.status === 404) return null;
+      throw error;
+    }
+  }
+
+  /**
+   * vSUMS: What the latest published version looks like on the canvas, or null when there is
+   * nothing to show (404: nothing published, or published before the content was stored)
+   * GET /api/v1/vsums/{id}/versions/latest/content
+   */
+  async getLatestVsumVersionContent(id: number | string): Promise<VsumVersionContentResponse | null> {
+    try {
+      const res = await this.authenticatedRequest<ApiResponse<VsumVersionContentResponse>>(
+        `/api/v1/vsums/${id}/versions/latest/content`,
+      );
+      return res?.data ?? null;
     } catch (error) {
       if ((error as { status?: number } | null)?.status === 404) return null;
       throw error;

@@ -468,6 +468,17 @@ describe('CanvasPage build problems', () => {
     await waitFor(() => expect(apiService.downloadVsumJar).toHaveBeenCalledWith(10, 99));
   });
 
+  it('opens the latest published version read-only in a new browser tab', async () => {
+    const open = vi.spyOn(globalThis, 'open').mockReturnValue(null);
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'v3' }));
+
+    expect(open).toHaveBeenCalledWith('/canvas/10/published', '_blank', 'noopener');
+    open.mockRestore();
+  });
+
   it('publishes and shows the new version number', async () => {
     (apiService.publishVsum as Mock).mockResolvedValueOnce({ data: { id: 5, vsumId: 10, status: 'SUCCEEDED' } });
     (apiService.getLatestVsumVersion as Mock)

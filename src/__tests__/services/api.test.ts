@@ -512,6 +512,35 @@ describe('ApiService – structured build problems', () => {
 
     await expect(apiService.getLatestVsumVersion(42)).rejects.toThrow();
   });
+
+  it('reads what the latest published version looks like on the canvas', async () => {
+    const content = {
+      number: 2,
+      createdBy: 'a@b.c',
+      createdAt: '2026-11-23T20:00:00Z',
+      project: { id: 42, name: 'p', metaModels: [], layout: { metaModels: {} } },
+      ruleSets: [],
+    };
+    mockFetch({ data: content, message: null });
+
+    await expect(apiService.getLatestVsumVersionContent(42)).resolves.toEqual(content);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/v1\/vsums\/42\/versions\/latest\/content$/),
+      expect.any(Object),
+    );
+  });
+
+  it('treats a 404 of the version content as "nothing to show"', async () => {
+    mockFetch({ message: 'Vsum version' }, 404);
+
+    await expect(apiService.getLatestVsumVersionContent(42)).resolves.toBeNull();
+  });
+
+  it('passes on other errors of the version content request', async () => {
+    mockFetch({ message: 'Server error' }, 500);
+
+    await expect(apiService.getLatestVsumVersionContent(42)).rejects.toThrow();
+  });
 });
 
 // ── downloadVsumBundle ────────────────────────────────────────────────────────
