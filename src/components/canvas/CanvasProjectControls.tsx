@@ -47,6 +47,15 @@ export function formatVersionLabel(
   return `v${version.number} · ${day}`;
 }
 
+const PROJECT_CONTROLS_TOP = 14;
+const PROJECT_CONTROLS_ROW_HEIGHT = 44;
+
+/**
+ * Where panels that fill the canvas below the project controls start: under the block's three
+ * rows and their two divider lines, with the same 14 px gap as above it.
+ */
+export const CANVAS_OVERLAY_TOP = PROJECT_CONTROLS_TOP * 2 + PROJECT_CONTROLS_ROW_HEIGHT * 3 + 2;
+
 const latestVersionStyle: React.CSSProperties = {
   marginLeft: 6,
   fontSize: 11,
@@ -57,21 +66,34 @@ const latestVersionStyle: React.CSSProperties = {
 
 const projectControlsStyle: React.CSSProperties = {
   position: 'absolute',
-  top: 14,
+  top: PROJECT_CONTROLS_TOP,
   left: 14,
   borderRadius: 8,
   zIndex: 400,
   background: 'var(--v-chrome-bg)',
   boxShadow: '0 4px 16px rgba(0,0,0,0.13), 0 0 0 1px rgba(0,0,0,0.07)',
   display: 'flex',
-  alignItems: 'center',
-  height: 44,
+  flexDirection: 'column',
+  alignItems: 'stretch',
   padding: '0 6px',
+};
+
+/** One line of the block; each group that used to follow a divider gets its own line. */
+const projectControlsRowStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  height: PROJECT_CONTROLS_ROW_HEIGHT,
   gap: 2,
 };
 
 const ProjectControlsDivider = () => (
   <div style={{ width: 1, height: 22, background: 'var(--v-chrome-divider)', margin: '0 5px', flexShrink: 0 }} />
+);
+
+const ProjectControlsRowDivider = () => (
+  <hr
+    style={{ height: 1, border: 'none', background: 'var(--v-chrome-divider)', margin: '0 5px', flexShrink: 0 }}
+  />
 );
 
 interface ProjectControlButtonProps {
@@ -184,200 +206,204 @@ export const CanvasProjectControls: React.FC<CanvasProjectControlsProps> = ({
   latestVersionLabel,
   onOpenLatestVersion,
 }) => (
-  <div style={projectControlsStyle}>
-    <button
-      type="button"
-      onClick={onBack}
-      title="Back to overview"
-      aria-label="Back to overview"
-      style={{
-        padding: 0,
-        border: 'none',
-        background: 'transparent',
-        width: 24,
-        height: 24,
-        borderRadius: 6,
-        flexShrink: 0,
-        margin: '0 4px',
-        cursor: 'pointer',
-        transition: 'opacity 0.15s',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-      onMouseEnter={event => { event.currentTarget.style.opacity = '0.75'; }}
-      onMouseLeave={event => { event.currentTarget.style.opacity = '1'; }}
-    >
-      <img
-        src={`${process.env.PUBLIC_URL}/assets/vitruvius1.png`}
-        alt=""
-        aria-hidden="true"
-        style={{ width: 24, height: 24, borderRadius: 6, display: 'block' }}
-      />
-    </button>
-
-    <ProjectControlsDivider />
-
-    {editingName ? (
-      <>
-        <input
-          value={nameInput}
-          onChange={event => onNameInputChange(event.target.value)}
-          onKeyDown={event => {
-            if (event.key === 'Enter') {
-              onConfirmRename();
-            } else if (event.key === 'Escape') {
-              onCancelRename();
-            }
-          }}
-          disabled={savingName}
-          style={{
-            fontSize: 13, fontWeight: 600, color: 'var(--v-text)',
-            border: '1.5px solid #93c5fd', borderRadius: 6,
-            padding: '2px 8px', outline: 'none', width: 170,
-            background: 'var(--v-input-bg)',
-          }}
-        />
-        <ProjectControlButton onClick={onConfirmRename} title="Save" active spinning={savingName}>
-          <CheckIcon />
-        </ProjectControlButton>
-        <ProjectControlButton onClick={onCancelRename} title="Cancel">
-          <XIcon />
-        </ProjectControlButton>
-      </>
-    ) : (
-      <>
-        <ProjectPickerMenu
-          currentProjectId={projectId}
-          activeProjectId={projectId}
-          openProjectIds={openProjectIds}
-          currentProjectName={projectName}
-          disabled={loading}
-          onSelectProject={project => onSelectProject(project.id, project.name, project.role)}
-        />
-        {!readOnly && (
-          <ProjectControlButton onClick={onStartRename} title="Edit project name">
-            <PencilIcon />
-          </ProjectControlButton>
-        )}
-        {readOnly && (
-          <span
-            title={sharedByLabel
-              ? `View-only access — shared by ${sharedByLabel}`
-              : 'You have view-only access to this project'}
-            style={{
-              marginLeft: 4,
-              padding: '2px 8px',
-              borderRadius: 6,
-              fontSize: 10,
-              fontWeight: 700,
-              background: '#eff6ff',
-              color: '#1d4ed8',
-              border: '1px solid #bfdbfe',
-              whiteSpace: 'nowrap',
-              maxWidth: 200,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {sharedByLabel ? `Shared by ${sharedByLabel}` : 'View only'}
-          </span>
-        )}
-      </>
-    )}
-
-    <ProjectControlsDivider />
-
-    <ProjectControlButton
-      onClick={onRefresh}
-      title={readOnly ? 'Reload latest changes from owner' : 'Reload'}
-      spinning={loading && !editingName}
-    >
-      <RefreshIcon />
-    </ProjectControlButton>
-
-    {validationProblemCount > 0 && (
+  <div data-testid="project-controls" style={projectControlsStyle}>
+    <div data-testid="project-controls-row-name" style={projectControlsRowStyle}>
       <button
         type="button"
-        onClick={onShowValidationProblems}
-        title="Show problems in this project"
-        data-testid="validation-problem-counter"
+        onClick={onBack}
+        title="Back to overview"
+        aria-label="Back to overview"
         style={{
+          padding: 0,
+          border: 'none',
+          background: 'transparent',
+          width: 24,
           height: 24,
-          marginLeft: 4,
-          padding: '0 8px',
-          border: '1px solid #fecaca',
           borderRadius: 6,
-          background: '#fef2f2',
-          color: '#b91c1c',
-          fontSize: 11,
-          fontWeight: 700,
+          flexShrink: 0,
+          margin: '0 4px',
           cursor: 'pointer',
-          whiteSpace: 'nowrap',
-          fontFamily: 'inherit',
+          transition: 'opacity 0.15s',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
+        onMouseEnter={event => { event.currentTarget.style.opacity = '0.75'; }}
+        onMouseLeave={event => { event.currentTarget.style.opacity = '1'; }}
       >
-        {validationProblemCount === 1 ? '1 problem' : `${validationProblemCount} problems`}
+        <img
+          src={`${process.env.PUBLIC_URL}/assets/vitruvius1.png`}
+          alt=""
+          aria-hidden="true"
+          style={{ width: 24, height: 24, borderRadius: 6, display: 'block' }}
+        />
       </button>
-    )}
 
-    {latestVersionLabel !== undefined && (
-      latestVersionLabel !== null && onOpenLatestVersion ? (
+      <ProjectControlsDivider />
+
+      {editingName ? (
+        <>
+          <input
+            value={nameInput}
+            onChange={event => onNameInputChange(event.target.value)}
+            onKeyDown={event => {
+              if (event.key === 'Enter') {
+                onConfirmRename();
+              } else if (event.key === 'Escape') {
+                onCancelRename();
+              }
+            }}
+            disabled={savingName}
+            style={{
+              fontSize: 13, fontWeight: 600, color: 'var(--v-text)',
+              border: '1.5px solid #93c5fd', borderRadius: 6,
+              padding: '2px 8px', outline: 'none', width: 170,
+              background: 'var(--v-input-bg)',
+            }}
+          />
+          <ProjectControlButton onClick={onConfirmRename} title="Save" active spinning={savingName}>
+            <CheckIcon />
+          </ProjectControlButton>
+          <ProjectControlButton onClick={onCancelRename} title="Cancel">
+            <XIcon />
+          </ProjectControlButton>
+        </>
+      ) : (
+        <>
+          <ProjectPickerMenu
+            currentProjectId={projectId}
+            activeProjectId={projectId}
+            openProjectIds={openProjectIds}
+            currentProjectName={projectName}
+            disabled={loading}
+            onSelectProject={project => onSelectProject(project.id, project.name, project.role)}
+          />
+          {!readOnly && (
+            <ProjectControlButton onClick={onStartRename} title="Edit project name">
+              <PencilIcon />
+            </ProjectControlButton>
+          )}
+          {readOnly && (
+            <span
+              title={sharedByLabel
+                ? `View-only access — shared by ${sharedByLabel}`
+                : 'You have view-only access to this project'}
+              style={{
+                marginLeft: 4,
+                padding: '2px 8px',
+                borderRadius: 6,
+                fontSize: 10,
+                fontWeight: 700,
+                background: '#eff6ff',
+                color: '#1d4ed8',
+                border: '1px solid #bfdbfe',
+                whiteSpace: 'nowrap',
+                maxWidth: 200,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {sharedByLabel ? `Shared by ${sharedByLabel}` : 'View only'}
+            </span>
+          )}
+        </>
+      )}
+    </div>
+
+    <ProjectControlsRowDivider />
+
+    <div data-testid="project-controls-row-version" style={projectControlsRowStyle}>
+      <ProjectControlButton
+        onClick={onRefresh}
+        title={readOnly ? 'Reload latest changes from owner' : 'Reload'}
+        spinning={loading && !editingName}
+      >
+        <RefreshIcon />
+      </ProjectControlButton>
+
+      {validationProblemCount > 0 && (
         <button
           type="button"
-          data-testid="latest-version"
-          onClick={onOpenLatestVersion}
-          title="Open the latest published version (read-only)"
+          onClick={onShowValidationProblems}
+          title="Show problems in this project"
+          data-testid="validation-problem-counter"
           style={{
-            ...latestVersionStyle,
-            padding: 0,
-            border: 'none',
-            background: 'none',
+            height: 24,
+            marginLeft: 4,
+            padding: '0 8px',
+            border: '1px solid #fecaca',
+            borderRadius: 6,
+            background: '#fef2f2',
+            color: '#b91c1c',
+            fontSize: 11,
+            fontWeight: 700,
             cursor: 'pointer',
-            textDecoration: 'underline',
+            whiteSpace: 'nowrap',
             fontFamily: 'inherit',
           }}
         >
-          {latestVersionLabel}
+          {validationProblemCount === 1 ? '1 problem' : `${validationProblemCount} problems`}
         </button>
-      ) : (
-        <span data-testid="latest-version" title="Latest published version" style={latestVersionStyle}>
-          {latestVersionLabel ?? 'Not published yet'}
-        </span>
-      )
-    )}
+      )}
 
-    {!readOnly && onPublish && (
-      <button
-        type="button"
-        onClick={onPublish}
-        disabled={publishing}
-        aria-busy={publishing}
-        title="Build the current state and publish it as the next version"
-        style={{
-          height: 26,
-          marginLeft: 6,
-          padding: '0 10px',
-          border: 'none',
-          borderRadius: 6,
-          background: '#049484',
-          color: '#ffffff',
-          fontSize: 11,
-          fontWeight: 700,
-          cursor: publishing ? 'not-allowed' : 'pointer',
-          opacity: publishing ? 0.7 : 1,
-          whiteSpace: 'nowrap',
-          fontFamily: 'inherit',
-        }}
-      >
-        {publishing ? 'Publishing…' : 'Publish'}
-      </button>
-    )}
+      {latestVersionLabel !== undefined && (
+        latestVersionLabel !== null && onOpenLatestVersion ? (
+          <button
+            type="button"
+            data-testid="latest-version"
+            onClick={onOpenLatestVersion}
+            title="Open the latest published version (read-only)"
+            style={{
+              ...latestVersionStyle,
+              padding: 0,
+              border: 'none',
+              background: 'none',
+              cursor: 'pointer',
+              textDecoration: 'underline',
+              fontFamily: 'inherit',
+            }}
+          >
+            {latestVersionLabel}
+          </button>
+        ) : (
+          <span data-testid="latest-version" title="Latest published version" style={latestVersionStyle}>
+            {latestVersionLabel ?? 'Not published yet'}
+          </span>
+        )
+      )}
+
+      {!readOnly && onPublish && (
+        <button
+          type="button"
+          onClick={onPublish}
+          disabled={publishing}
+          aria-busy={publishing}
+          title="Build the current state and publish it as the next version"
+          style={{
+            height: 26,
+            marginLeft: 6,
+            padding: '0 10px',
+            border: 'none',
+            borderRadius: 6,
+            background: '#049484',
+            color: '#ffffff',
+            fontSize: 11,
+            fontWeight: 700,
+            cursor: publishing ? 'not-allowed' : 'pointer',
+            opacity: publishing ? 0.7 : 1,
+            whiteSpace: 'nowrap',
+            fontFamily: 'inherit',
+          }}
+        >
+          {publishing ? 'Publishing…' : 'Publish'}
+        </button>
+      )}
+    </div>
 
     {onToggleReactionMode && (
       <>
-        <ProjectControlsDivider />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '0 4px' }}>
+        <ProjectControlsRowDivider />
+        <div data-testid="project-controls-row-mode" style={{ ...projectControlsRowStyle, padding: '0 4px' }}>
           <VsumLineStyleMenu
             lineStyle={reactionLineStyle}
             onLineStyleChange={onReactionLineStyleChange}

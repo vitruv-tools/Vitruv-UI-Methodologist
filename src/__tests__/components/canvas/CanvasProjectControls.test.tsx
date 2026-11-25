@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { CanvasProjectControls, formatVersionLabel } from '../../../components/canvas/CanvasProjectControls';
 
 interface MockProjectPickerMenuProps {
@@ -400,5 +400,57 @@ describe('CanvasProjectControls', () => {
     fireEvent.mouseEnter(vsum);
     expect(vsum).not.toHaveAttribute('aria-haspopup');
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+});
+
+describe('CanvasProjectControls layout', () => {
+  const renderFull = () => render(
+    <CanvasProjectControls
+      {...createProps()}
+      onPublish={vi.fn()}
+      latestVersionLabel="v3 · 23 Nov"
+      onToggleReactionMode={vi.fn()}
+    />,
+  );
+
+  it('stacks the controls in one block: name, then version and publish, then VSUM and Reactions', () => {
+    renderFull();
+
+    const block = screen.getByTestId('project-controls');
+    expect(block.style.flexDirection).toBe('column');
+    const rows = within(block).getAllByTestId(/^project-controls-row-/);
+    expect(rows.map(row => row.dataset.testid)).toEqual([
+      'project-controls-row-name',
+      'project-controls-row-version',
+      'project-controls-row-mode',
+    ]);
+
+    const [nameRow, versionRow, modeRow] = rows;
+    expect(within(nameRow).getByRole('button', { name: 'Back to overview' })).toBeInTheDocument();
+    expect(within(nameRow).getByText('Project picker')).toBeInTheDocument();
+    expect(within(nameRow).getByTitle('Edit project name')).toBeInTheDocument();
+    expect(within(nameRow).queryByTitle('Reload')).not.toBeInTheDocument();
+
+    expect(within(versionRow).getByTitle('Reload')).toBeInTheDocument();
+    expect(within(versionRow).getByTestId('latest-version')).toHaveTextContent('v3 · 23 Nov');
+    expect(within(versionRow).getByRole('button', { name: 'Publish' })).toBeInTheDocument();
+
+    expect(within(modeRow).getByRole('button', { name: 'VSUM' })).toBeInTheDocument();
+    expect(within(modeRow).getByRole('button', { name: 'Reactions' })).toBeInTheDocument();
+  });
+
+  it('separates the rows with horizontal lines', () => {
+    renderFull();
+
+    const lines = within(screen.getByTestId('project-controls')).getAllByRole('separator');
+    expect(lines).toHaveLength(2);
+    lines.forEach(line => expect(line.tagName).toBe('HR'));
+  });
+
+  it('leaves out the VSUM and Reactions row without a mode switch', () => {
+    render(<CanvasProjectControls {...createProps()} />);
+
+    expect(screen.queryByTestId('project-controls-row-mode')).not.toBeInTheDocument();
+    expect(within(screen.getByTestId('project-controls')).getAllByRole('separator')).toHaveLength(1);
   });
 });
