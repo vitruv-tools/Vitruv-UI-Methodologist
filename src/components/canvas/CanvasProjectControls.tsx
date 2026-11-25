@@ -81,10 +81,8 @@ const ProjectControlsDivider = () => (
 );
 
 const ProjectControlsRowDivider = () => (
-  <div
-    role="separator"
-    aria-orientation="horizontal"
-    style={{ height: 1, background: 'var(--v-chrome-divider)', margin: '0 5px', flexShrink: 0 }}
+  <hr
+    style={{ height: 1, border: 'none', background: 'var(--v-chrome-divider)', margin: '0 5px', flexShrink: 0 }}
   />
 );
 

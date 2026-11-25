@@ -415,7 +415,7 @@ describe('CanvasProjectControls layout', () => {
 
     const lines = within(screen.getByTestId('project-controls')).getAllByRole('separator');
     expect(lines).toHaveLength(2);
-    lines.forEach(line => expect(line).toHaveAttribute('aria-orientation', 'horizontal'));
+    lines.forEach(line => expect(line.tagName).toBe('HR'));
   });
 
   it('leaves out the VSUM and Reactions row without a mode switch', () => {
