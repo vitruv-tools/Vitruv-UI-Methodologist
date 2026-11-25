@@ -100,14 +100,27 @@ export function findFreeEcorePositionInCircle(
 
   const step = ECORE_W + ECORE_GAP;
   for (let ring = 1; ring * step <= 2 * circle.r; ring++) {
-    for (let dx = -ring; dx <= ring; dx++) {
-      for (let dy = -ring; dy <= ring; dy++) {
-        if (Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
-        const x = start.x + dx * step;
-        const y = start.y + dy * step;
-        if (isUsable(x, y)) return { x, y };
-      }
-    }
+    const candidate = ringCandidates(start, ring, step).find(({ x, y }) => isUsable(x, y));
+    if (candidate) return candidate;
   }
   return null;
+}
+
+/**
+ * The positions on the square ring `ring` steps away from `start`, in search order
+ * (column by column from left to right, top to bottom within each column).
+ */
+function ringCandidates(
+  start: { x: number; y: number },
+  ring: number,
+  step: number,
+): { x: number; y: number }[] {
+  const candidates: { x: number; y: number }[] = [];
+  for (let dx = -ring; dx <= ring; dx++) {
+    for (let dy = -ring; dy <= ring; dy++) {
+      if (Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
+      candidates.push({ x: start.x + dx * step, y: start.y + dy * step });
+    }
+  }
+  return candidates;
 }
