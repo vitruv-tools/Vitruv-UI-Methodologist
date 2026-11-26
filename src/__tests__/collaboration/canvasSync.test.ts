@@ -301,6 +301,23 @@ describe('deleting', () => {
     expect(mine.project.read().relations.size).toBe(0);
   });
 
+  it('several metamodels go in one step, which one undo brings back', async () => {
+    const mine = await started();
+
+    mine.canvasSync.removeModels([1, 3]);
+    // The canvas removes their boxes, as the real one does.
+    mine.canvas.state.models.delete(1);
+    mine.canvas.state.models.delete(3);
+    mine.canvas.state.relations.clear();
+    expect([...mine.project.read().models.keys()]).toEqual([2]);
+
+    mine.canvasSync.undo();
+    await mine.canvasSync.whenIdle();
+    expect([...mine.project.read().models.keys()]).toEqual([1, 2, 3]);
+    expect([...mine.canvas.state.models.keys()].sort()).toEqual([1, 2, 3]);
+    expect(mine.canvasSync.history().canUndo).toBe(false);
+  });
+
   it('a relation is explicit', async () => {
     const mine = await started();
 

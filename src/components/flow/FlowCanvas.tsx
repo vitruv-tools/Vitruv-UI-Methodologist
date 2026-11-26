@@ -400,7 +400,7 @@ function ecoreNodeDataFromMeta(fileName: string, fileContent: string, nsUri: str
 
 /** Library IDs of the metamodels a confirmed deletion removes from the canvas. */
 function deletedMetaModelIds(pending: PendingDeleteState, nodes: Node[]): number[] {
-  return [pending.fileId, ...pending.nodeIds]
+  return [...pending.fileIds, ...pending.nodeIds]
     .map(id => nodes.find(n => n.id === id))
     .filter((node): node is Node => node?.type === 'ecoreFile')
     .map(metaModelDocumentId)
@@ -496,7 +496,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
     const selectedFileIdsRef = useRef(selectedFileIds);
     selectedFileIdsRef.current = selectedFileIds;
-    /** The selected model when exactly one is selected; deleting works on a single model. */
+    /** The selected model when exactly one is selected. */
     const selectedFileId = selectedFileIds.length === 1 ? selectedFileIds[0] : null;
     const selectOnlyFile = useCallback((id: string | null) => {
       setSelectedFileIds(id ? [id] : []);
@@ -674,7 +674,8 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       const project = collaborationRef.current;
       if (!project || readOnly) return;
       const currentNodes = nodesRef.current;
-      deletedMetaModelIds(pending, currentNodes).forEach(sourceId => project.removeModel(sourceId));
+      const sourceIds = deletedMetaModelIds(pending, currentNodes);
+      if (sourceIds.length > 0) project.removeModels(sourceIds);
       const deletedEdges = pending.edgeIds
         .map(id => edgesRef.current.find(e => e.id === id))
         .filter((edge): edge is Edge => edge !== undefined);
@@ -732,10 +733,11 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
 
     const handleCloseDetails = useCallback(() => setDetailModel(null), []);
 
-    // Unified delete handler — used by both keyboard Delete and context menu
+    // Delete button of a box: a box in the selection takes all selected boxes along, like the Delete key.
     const handleRequestDelete = useCallback((nodeId: string) => {
       if (!editable) return;
-      setPendingDelete({ nodeIds: [], edgeIds: [], fileId: nodeId });
+      const selected = selectedFileIdsRef.current;
+      setPendingDelete({ nodeIds: [], edgeIds: [], fileIds: selected.includes(nodeId) ? selected : [nodeId] });
     }, [editable]);
 
     useEffect(() => {
@@ -995,7 +997,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       readOnly: !editable,
       nodes,
       edges,
-      selectedFileId,
+      selectedFileIds,
       umlModalOpen,
       canUndo,
       canRedo,
@@ -1317,7 +1319,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
 
     const handleDeleteEdge = useCallback(() => {
       if (codeEditorState?.edgeId) {
-        announceDeletion({ nodeIds: [], edgeIds: [codeEditorState.edgeId], fileId: null });
+        announceDeletion({ nodeIds: [], edgeIds: [codeEditorState.edgeId], fileIds: [] });
         removeEdge(codeEditorState.edgeId);
         setCodeEditorState(null);
       }

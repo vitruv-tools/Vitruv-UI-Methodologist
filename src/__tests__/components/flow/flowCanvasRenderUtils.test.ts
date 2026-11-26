@@ -1,5 +1,6 @@
 import { Edge, Node } from 'reactflow';
 import {
+  getPendingDeleteConfirmMessage,
   mapEcoreFlowNode,
   mapEditableFlowNode,
   mapFlowCanvasEdge,
@@ -242,5 +243,22 @@ describe('mapFlowCanvasEdge fine-granular parallel meta', () => {
 
     const mapped = mapFlowCanvasEdge(edge, mapContext());
     expect(mapped.data.customControlPoint).toBeUndefined();
+  });
+});
+
+describe('getPendingDeleteConfirmMessage', () => {
+  const pending = (fileIds: string[], edgeIds: string[] = []) => ({ nodeIds: [], edgeIds, fileIds });
+
+  it('asks about one meta model like before', () => {
+    expect(getPendingDeleteConfirmMessage(pending(['a']))).toBe('Do you really want to remove this element from the canvas?');
+  });
+
+  it('names how many meta models are removed', () => {
+    expect(getPendingDeleteConfirmMessage(pending(['a', 'b', 'c']))).toBe('Remove the 3 selected meta models from the canvas?');
+  });
+
+  it('mentions connections removed along with one or several meta models', () => {
+    expect(getPendingDeleteConfirmMessage(pending(['a'], ['e']))).toBe('Remove the selected connection(s) and the meta model from the canvas?');
+    expect(getPendingDeleteConfirmMessage(pending(['a', 'b'], ['e']))).toBe('Remove the selected connection(s) and the 2 meta models from the canvas?');
   });
 });

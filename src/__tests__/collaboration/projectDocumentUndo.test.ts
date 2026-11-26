@@ -34,6 +34,18 @@ const name = (p: ProjectDocument, id: number) => p.read().models.get(id)?.name;
 const position = (p: ProjectDocument, id: number) => p.read().models.get(id)?.position;
 
 describe('undoing and redoing own changes', () => {
+  it('brings back several metamodels deleted together, with their relations, in one step', () => {
+    const p = project();
+    p.removeModels([1, 3]);
+    expect([...p.read().models.keys()]).toEqual([2]);
+
+    p.undo();
+
+    expect([...p.read().models.keys()]).toEqual([1, 2, 3]);
+    expect(p.read().relations.get(pairKey(1, 2))?.reactionFileId).toBe(30);
+    expect(p.history().canUndo).toBe(false);
+  });
+
   it('has nothing to undo or redo at first', () => {
     const p = project();
 

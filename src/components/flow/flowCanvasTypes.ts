@@ -16,7 +16,8 @@ export interface ConnectionDragState {
 export interface PendingDeleteState {
   nodeIds: string[];
   edgeIds: string[];
-  fileId: string | null;
+  /** IDs of the metamodel boxes to remove: the selected ones, or the one whose delete was used. */
+  fileIds: string[];
 }
 
 export interface CodeEditorState {
