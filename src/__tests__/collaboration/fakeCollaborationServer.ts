@@ -59,6 +59,9 @@ export async function startFakeCollaborationServer(
   const http: Server = createServer();
   const webSockets = new WebSocketServer({ noServer: true });
   http.on('upgrade', (request, socket, head) => {
+    // A client that is turned away may reset the connection while the answer is still being sent
+    // (`ECONNRESET`). Without a listener, Node would report that as an uncaught exception.
+    socket.on('error', () => {});
     const url = new URL(request.url ?? '/', 'http://localhost');
     const room = decodeURIComponent(url.pathname.slice(1));
     const token = url.searchParams.get('token');
