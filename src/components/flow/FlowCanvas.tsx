@@ -83,7 +83,7 @@ import {
   shouldCloseDetailOnBoxDrag,
   syncBboxDraggingIds,
 } from './flowCanvasNodeChangeUtils';
-import { findFreeEcorePosition } from './flowCanvasLayoutUtils';
+import { findFreeEcorePosition, findFreeEcorePositionInCircle } from './flowCanvasLayoutUtils';
 import { buildReactionEdgeFromNodes, resolveEcoreFileSelectAction } from './flowCanvasEcoreSelect';
 import {
   applyPendingCanvasDelete,
@@ -298,6 +298,11 @@ export interface FlowCanvasHandle {
   }) => void;
   /** Removes a relation that another user deleted. */
   removeReactionRelation: (sourceId: number, targetId: number) => void;
+  /**
+   * Shows the shared VSUM circle. Until it is `confirmed` to be the shared document's, no box is
+   * moved or placed because of it.
+   */
+  setVsumCircle: (circle: Circle, confirmed: boolean) => void;
 }
 
 interface FlowCanvasProps {
@@ -680,7 +685,26 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       }
     }, [readOnly, requestMappingsPush]);
 
-    const [circle, setCircle] = useCircleContainment(nodes);
+    // With the shared project the circle is the document's. Until this client has it from there it
+    // may still be replaced, so no box is clamped to it or placed in it (see CanvasSync.seedVsumCircle).
+    const [circleConfirmed, setCircleConfirmed] = useState(false);
+    const circleClampEnabled = collaboration === undefined || circleConfirmed;
+    const [circle, setCircle] = useCircleContainment(nodes, {
+      // Editors recompute the shared circle once they have it; viewers only while there is none.
+      recompute: collaboration === undefined || (writesToProject ? circleConfirmed : !circleConfirmed),
+      onRecompute: (next) => {
+        if (writesToProject) collaborationRef.current?.pushVsumCircle(next);
+      },
+    });
+    const circleRef = useRef(circle);
+    circleRef.current = circle;
+    const circleClampEnabledRef = useRef(circleClampEnabled);
+    circleClampEnabledRef.current = circleClampEnabled;
+
+    // A project from before the circle was shared gets one in its document.
+    useEffect(() => {
+      if (writesToProject) collaboration?.seedVsumCircle();
+    }, [writesToProject, collaboration]);
     const syncBaseRef = useRef<() => ViewSyncBase>(() => ({ metaModelIds: [], metaModelRelationRequests: null }));
     const {
       viewTypes,
@@ -766,7 +790,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
 
     // Pull stray nodes back inside the circle when Views mode is entered.
     useEffect(() => {
-      if (!circleVisible) return;
+      if (!circleVisible || !circleClampEnabled) return;
       const displaced = clampAllNodesToCircle(nodes, circle);
       if (displaced.size > 0) {
         setNodes(prev => prev.map(n => {
@@ -774,9 +798,9 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           return newPos ? { ...n, position: newPos } : n;
         }));
       }
-      // Intentionally only re-runs when circle visibility toggles.
+      // Intentionally only re-runs when circle visibility toggles or the shared circle is confirmed.
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [circleVisible]);
+    }, [circleVisible, circleClampEnabled]);
 
     // ── Edge handles ──────────────────────────────────────────────────────────
 
@@ -850,7 +874,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
 
       const liveNodes = nodesRef.current;
       const clampedChanges = clampNodeChanges(changes, {
-        circleVisible,
+        circleVisible: circleVisible && circleClampEnabled,
         umlModalOpen,
         circle,
         nodes: liveNodes,
@@ -884,7 +908,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       );
       persistLayoutAfterDrag(nextNodes);
       if (umlModalOpen) setEdges(clearUmlCustomControlPoints);
-    }, [originalOnNodesChange, recalculateEdgeHandles, circle, circleVisible, umlModalOpen, detailModel, setEdges, readOnly, locked, edges, takeModelSelectChanges, trackNodeDrag, persistLayoutAfterDrag]);
+    }, [originalOnNodesChange, recalculateEdgeHandles, circle, circleVisible, circleClampEnabled, umlModalOpen, detailModel, setEdges, readOnly, locked, edges, takeModelSelectChanges, trackNodeDrag, persistLayoutAfterDrag]);
 
     const guardedOnEdgesChange = useCallback((allChanges: any) => {
       const changes = boxSelectionRef.current
@@ -1481,9 +1505,10 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     }, [reactFlowInstance, circle.cx, circle.cy]);
 
     const handleCircleResize = useCallback((newR: number) => {
-      if (!editable) return;
+      if (!editable || !circleClampEnabled) return;
       const newCircle: Circle = { ...circle, r: Math.max(MIN_CIRCLE_RADIUS, newR) };
       setCircle(newCircle);
+      if (writesToProject) collaborationRef.current?.pushVsumCircle(newCircle);
 
       const displaced = clampAllNodesToCircle(nodes, newCircle);
       if (displaced.size > 0) {
@@ -1493,7 +1518,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         }));
       }
       fitViewToCircle(newCircle);
-    }, [editable, circle, setCircle, nodes, setNodes, fitViewToCircle]);
+    }, [editable, circleClampEnabled, writesToProject, circle, setCircle, nodes, setNodes, fitViewToCircle]);
 
     const handleAddViewType = useCallback((
       label: string,
@@ -1595,8 +1620,9 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         const newCircle = computeInitialCircle(updatedNodes.filter(n => n.type === 'ecoreFile'));
         pendingFitToCircle.current = true;
         setCircle(newCircle);
+        if (writesToProject) collaborationRef.current?.pushVsumCircle(newCircle);
       }, 50);
-    }, [nodes, edges, setNodes, setEdges, setCircle]);
+    }, [nodes, edges, setNodes, setEdges, setCircle, writesToProject]);
 
     useWorkspaceLayoutEvents({ autoLayoutEcoreBoxes, fitEcoreWorkspace });
 
@@ -1797,12 +1823,17 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         ? undefined
         : loadVsumLayoutPosition(useProjectStore.getState().activeId, layoutIdentity);
 
+      // A box the user adds goes inside the VSUM circle, so that the circle doesn't have to grow.
+      const positionInCircle = !exactPosition && !meta?.fromServerLoad && circleClampEnabledRef.current
+        ? findFreeEcorePositionInCircle(ecoreNodes, circleRef.current, savedPosition ?? meta?.position)
+        : null;
+
       const newEcoreNode: Node = {
         id: nodeId,
         type: 'ecoreFile',
         position: exactPosition
           ? { x: exactPosition.x, y: exactPosition.y }
-          : findFreeEcorePosition(ecoreNodes, savedPosition ?? meta?.position ?? { x: 60, y: 60 }),
+          : positionInCircle ?? findFreeEcorePosition(ecoreNodes, savedPosition ?? meta?.position ?? { x: 60, y: 60 }),
         data: {
           ...ecoreNodeDataFromMeta(fileName, fileContent, nsUri, meta),
           metaModelId,
@@ -1999,6 +2030,11 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       globalThis.setTimeout(() => recalculateEdgeHandles(), 100);
     }, [setNodes, recalculateEdgeHandles]);
 
+    const setVsumCircle = useCallback((next: Circle, confirmed: boolean) => {
+      setCircle(next);
+      setCircleConfirmed(confirmed);
+    }, [setCircle]);
+
     const upsertReactionRelation = useCallback((relation: {
       sourceId: number;
       targetId: number;
@@ -2059,7 +2095,8 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       setEcorePositions,
       upsertReactionRelation,
       removeReactionRelation,
-    }), [removeEcoreFileBySourceId, setEcorePositions, upsertReactionRelation, removeReactionRelation, openViewTypeFileAt, handleToolClick, loadDiagramData, nodes, edges, viewTypes, addEcoreFile, updateEcoreDisplayName, updateEcoreFileData, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, getWorkspaceSnapshot, autoLayoutEcoreBoxes, fitUmlView, openSelectedReactionEditor, openReactionFileAt, openMetaModelFile, establishBaseline, locked]);
+      setVsumCircle,
+    }), [setVsumCircle, removeEcoreFileBySourceId, setEcorePositions, upsertReactionRelation, removeReactionRelation, openViewTypeFileAt, handleToolClick, loadDiagramData, nodes, edges, viewTypes, addEcoreFile, updateEcoreDisplayName, updateEcoreFileData, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, getWorkspaceSnapshot, autoLayoutEcoreBoxes, fitUmlView, openSelectedReactionEditor, openReactionFileAt, openMetaModelFile, establishBaseline, locked]);
 
     // ── Render mapping ────────────────────────────────────────────────────────
 

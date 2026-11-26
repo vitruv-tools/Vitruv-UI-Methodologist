@@ -104,19 +104,31 @@ export function clampAllNodesToCircle(
     return result;
 }
 
+export interface CircleContainmentOptions {
+    /** Whether the circle may be recomputed here; off while it comes from elsewhere. Default `true`. */
+    recompute?: boolean;
+    /** Called with the circle after it was recomputed. */
+    onRecompute?: (circle: Circle) => void;
+}
+
 /**
  * Hook: manages circle as proper React state so changes trigger re-renders.
- * Recomputes center+radius only when ecoreFile node COUNT increases.
+ * Recomputes center+radius only when ecoreFile node COUNT increases and a box is outside the circle.
  */
-export function useCircleContainment(nodes: Node[]): [Circle, React.Dispatch<React.SetStateAction<Circle>>] {
+export function useCircleContainment(
+    nodes: Node[],
+    { recompute = true, onRecompute }: CircleContainmentOptions = {},
+): [Circle, React.Dispatch<React.SetStateAction<Circle>>] {
     const ecoreNodes = nodes.filter(n => n.type === 'ecoreFile');
 
     const [circle, setCircle] = useState<Circle>(() => computeInitialCircle(ecoreNodes));
     const [prevCount, setPrevCount] = useState(ecoreNodes.length);
 
     useEffect(() => {
-        if (ecoreNodes.length > prevCount) {
-            setCircle(computeInitialCircle(ecoreNodes));
+        if (ecoreNodes.length > prevCount && recompute && clampAllNodesToCircle(ecoreNodes, circle).size > 0) {
+            const next = computeInitialCircle(ecoreNodes);
+            setCircle(next);
+            onRecompute?.(next);
         }
         setPrevCount(ecoreNodes.length);
         // eslint-disable-next-line react-hooks/exhaustive-deps

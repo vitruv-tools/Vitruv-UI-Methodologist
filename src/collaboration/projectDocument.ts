@@ -4,17 +4,20 @@ import {
   LAYOUT,
   LAYOUT_META_MODELS,
   LAYOUT_REACTIONS,
+  LAYOUT_VSUM_CIRCLE,
   MODELS,
   NOT_DELETED,
   RELATIONS,
   type ModelFields,
   type Position,
   type RelationFields,
+  type VsumCircle,
 } from './document';
 import {
   canonicalJson,
   diffProjectState,
   hasChanges,
+  isSameVsumCircle,
   pairKey,
   readProjectState,
   type ProjectChanges,
@@ -26,6 +29,9 @@ import {
  * aren't reported as changes of other users.
  */
 export const LOCAL_ORIGIN = Symbol('canvas');
+
+/** Origin of this client's changes that are not the user's own step, so that undo leaves them alone. */
+const UNTRACKED_ORIGIN = Symbol('canvas, not undoable');
 
 /** What there is to undo and redo for this user. */
 export interface UndoHistory {
@@ -243,6 +249,30 @@ export class ProjectDocument {
     });
   }
 
+  /** Sets the shared VSUM circle; only written if it differs. */
+  setVsumCircle(circle: VsumCircle): void {
+    this.write('change the VSUM circle', () => this.writeVsumCircle(circle));
+  }
+
+  /**
+   * Gives the document a VSUM circle if it has none, e.g. for a project from before the circle was
+   * shared. It is not a step of the user, so undo doesn't take it back. Returns whether it was written.
+   */
+  seedVsumCircle(circle: VsumCircle): boolean {
+    let written = false;
+    this.write(
+      'seed the VSUM circle',
+      () => {
+        if (readProjectState(this.doc).vsumCircle === null) {
+          this.writeVsumCircle(circle);
+          written = true;
+        }
+      },
+      { undoable: false },
+    );
+    return written;
+  }
+
   /**
    * Reports what other users (and the server) change, as what differs from before, together with
    * the whole state it leads to. The user's own changes aren't reported. Returns the state at this
@@ -256,7 +286,7 @@ export class ProjectDocument {
       const next = this.read();
       const changes = diffProjectState(previous, next);
       previous = next;
-      if (origin !== LOCAL_ORIGIN && hasChanges(changes)) {
+      if (origin !== LOCAL_ORIGIN && origin !== UNTRACKED_ORIGIN && hasChanges(changes)) {
         listener(changes, next);
       }
     };
@@ -271,7 +301,11 @@ export class ProjectDocument {
   private write(
     what: string,
     change: () => void,
-    { joinsStep = false, keepsStepOpen = false }: { joinsStep?: boolean; keepsStepOpen?: boolean } = {},
+    {
+      joinsStep = false,
+      keepsStepOpen = false,
+      undoable = true,
+    }: { joinsStep?: boolean; keepsStepOpen?: boolean; undoable?: boolean } = {},
   ): void {
     if (!this.isLoaded()) {
       console.warn(`Not able to ${what}: the project is not loaded into the shared document yet.`);
@@ -280,7 +314,7 @@ export class ProjectDocument {
     if (!joinsStep) {
       this.undoManager.stopCapturing();
     }
-    this.doc.transact(change, LOCAL_ORIGIN);
+    this.doc.transact(change, undoable ? LOCAL_ORIGIN : UNTRACKED_ORIGIN);
     this.stepOpen = keepsStepOpen;
   }
 
@@ -289,6 +323,12 @@ export class ProjectDocument {
     const current = positions.get(key) as Position | undefined;
     if (current?.x !== position.x || current?.y !== position.y) {
       positions.set(key, { x: position.x, y: position.y });
+    }
+  }
+
+  private writeVsumCircle(circle: VsumCircle): void {
+    if (!isSameVsumCircle(readProjectState(this.doc).vsumCircle, circle)) {
+      this.doc.getMap(LAYOUT).set(LAYOUT_VSUM_CIRCLE, { cx: circle.cx, cy: circle.cy, r: circle.r });
     }
   }
 

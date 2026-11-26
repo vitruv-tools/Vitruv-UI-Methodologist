@@ -1,6 +1,9 @@
+import { computeInitialCircle } from '../hooks/useCircleContainment';
+import type { VsumCircle } from './document';
 import type { ProjectDocument, UndoHistory } from './projectDocument';
 import {
   diffProjectState,
+  isSameVsumCircle,
   pairKey,
   type ProjectChanges,
   type ProjectState,
@@ -15,7 +18,18 @@ export interface CanvasPort {
   read(): ProjectState;
   /** Shows what changed in the project on the canvas; resolves once that is done. */
   apply(changes: ProjectChanges): Promise<void>;
+  /**
+   * Shows a VSUM circle. It is `confirmed` once it is the one of the shared document; before that
+   * the canvas must not move metamodels because of it.
+   */
+  showVsumCircle(circle: VsumCircle, confirmed: boolean): void;
 }
+
+/**
+ * How long a circle this client seeded waits for the seed of another client that opened the project
+ * at the same time. If the document still has this client's circle afterwards, it counts as shared.
+ */
+export const SEED_CONFIRM_MS = 2000;
 
 /**
  * Keeps the canvas and a project's shared document in line.
@@ -44,6 +58,7 @@ export class CanvasSync {
   private pending = 0;
   private pushAfter: 'changes' | 'mappings' | undefined;
   private stopped = false;
+  private seedTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     private readonly project: ProjectDocument,
@@ -68,6 +83,7 @@ export class CanvasSync {
   /** Stops following the project. Changes that are queued are dropped. */
   stop(): void {
     this.stopped = true;
+    globalThis.clearTimeout(this.seedTimer);
     this.stopListening?.();
     this.stopListening = undefined;
     this.known = undefined;
@@ -185,6 +201,44 @@ export class CanvasSync {
     this.known = { ...this.known, reactionLayout: this.project.read().reactionLayout };
   }
 
+  /** Writes the VSUM circle the user changed (resized, laid out, grown) into the document. */
+  pushVsumCircle(circle: VsumCircle): void {
+    if (this.stopped || this.known === undefined) {
+      return;
+    }
+    this.project.setVsumCircle(circle);
+    this.known = { ...this.known, vsumCircle: this.project.read().vsumCircle };
+  }
+
+  /**
+   * Gives a document without a VSUM circle one, computed from the positions in the document, and
+   * shows it unconfirmed. Clients that seed at the same time compute it from the same positions;
+   * whichever write wins is shown everywhere. After {@link SEED_CONFIRM_MS} the circle counts as
+   * confirmed if the document still has it; a different one arrives as a change of another user.
+   */
+  seedVsumCircle(): void {
+    if (this.stopped || this.known === undefined || this.seedTimer !== undefined) {
+      return;
+    }
+    const document = this.project.read();
+    if (document.vsumCircle !== null) {
+      return;
+    }
+    const circle = computeInitialCircle(
+      [...document.models.values()].flatMap((model) => (model.position === null ? [] : [{ position: model.position }])),
+    );
+    if (!this.project.seedVsumCircle(circle)) {
+      return;
+    }
+    this.known = { ...this.known, vsumCircle: circle };
+    this.canvas.showVsumCircle(circle, false);
+    this.seedTimer = globalThis.setTimeout(() => {
+      if (!this.stopped && isSameVsumCircle(this.project.read().vsumCircle, circle)) {
+        this.canvas.showVsumCircle(circle, true);
+      }
+    }, SEED_CONFIRM_MS);
+  }
+
   /** The user deleted a metamodel from the canvas. */
   removeModel(sourceId: number): void {
     if (this.known === undefined) {
@@ -281,6 +335,8 @@ export type CanvasCollaboration = Pick<
   | 'pushLocalChanges'
   | 'pushMappings'
   | 'pushReactionLayout'
+  | 'pushVsumCircle'
+  | 'seedVsumCircle'
   | 'removeModel'
   | 'removeRelation'
   | 'undo'

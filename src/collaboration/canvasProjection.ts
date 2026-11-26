@@ -51,7 +51,8 @@ export function projectCanvasState({ nodes, relationRequests, reactionLayout }: 
     });
   }
 
-  return { models, relations, reactionLayout };
+  // The canvas doesn't report its VSUM circle: it only takes the document's, and writes its own explicitly.
+  return { models, relations, reactionLayout, vsumCircle: null };
 }
 
 /** The ID the canvas keys a metamodel by: the library ID, else the ID of the metamodel itself. */

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
-import { CanvasSync, type CanvasPort } from '../../collaboration/canvasSync';
+import { CanvasSync, SEED_CONFIRM_MS, type CanvasPort } from '../../collaboration/canvasSync';
+import { LAYOUT, LAYOUT_VSUM_CIRCLE, type VsumCircle } from '../../collaboration/document';
 import { ProjectDocument } from '../../collaboration/projectDocument';
 import { pairKey, type ProjectChanges, type ProjectState } from '../../collaboration/projectState';
 import { buildDocument, sync } from './testDocuments';
@@ -9,8 +10,10 @@ const LOW_CODE = { id: 5, sourceId: 'a', targetId: 'b', lowCodeReactionRequestBa
 
 /** An in-memory canvas: it applies what it is told, and the "user" changes it directly. */
 class FakeCanvas implements CanvasPort {
-  state: ProjectState = { models: new Map(), relations: new Map(), reactionLayout: {} };
+  state: ProjectState = { models: new Map(), relations: new Map(), reactionLayout: {}, vsumCircle: null };
   applied: ProjectChanges[] = [];
+  /** The VSUM circles it was told to show, and whether each was confirmed. */
+  circles: [VsumCircle, boolean][] = [];
   /** Resolves a pending {@link apply} when called, if {@link hold} was used. */
   private release: (() => void) | undefined;
   private held: Promise<void> | undefined;
@@ -29,6 +32,11 @@ class FakeCanvas implements CanvasPort {
     for (const relation of changes.upsertedRelations) this.state.relations.set(pairKey(relation.sourceId, relation.targetId), { ...relation });
     for (const { sourceId, targetId } of changes.removedRelations) this.state.relations.delete(pairKey(sourceId, targetId));
     if (changes.reactionLayout) this.state.reactionLayout = changes.reactionLayout;
+    if (changes.vsumCircle) this.circles.push([changes.vsumCircle, true]);
+  }
+
+  showVsumCircle(circle: VsumCircle, confirmed: boolean): void {
+    this.circles.push([circle, confirmed]);
   }
 
   /** Makes the next applies wait until {@link unhold}. */
@@ -492,5 +500,52 @@ describe('undoing', () => {
 
     expect(mine.canvasSync.undo()).toBe(false);
     expect(mine.project.read().models.get(1)?.name).toBe('Vehicle');
+  });
+});
+
+describe('the VSUM circle', () => {
+  const CIRCLE = { cx: 1, cy: 2, r: 300 };
+  afterEach(() => vi.useRealTimers());
+
+  function serverWithCircle(circle: VsumCircle = CIRCLE) {
+    const server = serverDocument();
+    server.getMap(LAYOUT).set(LAYOUT_VSUM_CIRCLE, circle);
+    return server;
+  }
+
+  it('seeded by two users at once ends up the same for both, and only the shared one is confirmed', async () => {
+    vi.useFakeTimers();
+    const server = serverDocument();
+    const mine = await started(client(server));
+    const theirs = await started(client(server));
+    // They see the models in different places when they open the project.
+    theirs.project.moveModels(new Map([[3, { x: 900, y: 900 }]]));
+
+    mine.canvasSync.seedVsumCircle();
+    theirs.canvasSync.seedVsumCircle();
+    sync(mine.doc, theirs.doc);
+    sync(theirs.doc, mine.doc);
+    await mine.canvasSync.whenIdle();
+    await theirs.canvasSync.whenIdle();
+    vi.advanceTimersByTime(SEED_CONFIRM_MS);
+
+    const shared = mine.project.read().vsumCircle!;
+    expect(theirs.project.read().vsumCircle).toEqual(shared);
+    for (const { canvas } of [mine, theirs]) {
+      const confirmed = canvas.circles.filter(([, isConfirmed]) => isConfirmed).map(([circle]) => circle);
+      expect(confirmed).toEqual([shared]);
+    }
+  });
+
+  it('a change reaches other users', async () => {
+    const server = serverWithCircle();
+    const mine = await started(client(server));
+    const theirs = await started(client(server));
+
+    mine.canvasSync.pushVsumCircle({ ...CIRCLE, r: 500 });
+    sync(mine.doc, theirs.doc);
+    await theirs.canvasSync.whenIdle();
+
+    expect(theirs.canvas.circles.at(-1)).toEqual([{ ...CIRCLE, r: 500 }, true]);
   });
 });

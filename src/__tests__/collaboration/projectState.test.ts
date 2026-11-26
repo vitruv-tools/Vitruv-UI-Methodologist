@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
-import { LAYOUT, LAYOUT_META_MODELS, LAYOUT_REACTIONS, MODELS, RELATIONS } from '../../collaboration/document';
+import { LAYOUT, LAYOUT_META_MODELS, LAYOUT_REACTIONS, LAYOUT_VSUM_CIRCLE, MODELS, RELATIONS } from '../../collaboration/document';
 import { diffProjectState, hasChanges, pairKey, readProjectState } from '../../collaboration/projectState';
 import { buildDocument } from './testDocuments';
 
@@ -216,5 +216,35 @@ describe('diffProjectState', () => {
 
     expect(changes.reactionLayout).toEqual({ 'ns:car': { bbox: { x: 1, y: 2 } } });
     expect(hasChanges(changes)).toBe(true);
+  });
+});
+
+describe('the VSUM circle', () => {
+  it('is read from the layout, and left out if it is not a valid circle', () => {
+    const doc = buildDocument();
+    expect(readProjectState(doc).vsumCircle).toBeNull();
+
+    doc.getMap(LAYOUT).set(LAYOUT_VSUM_CIRCLE, { cx: 1, cy: 2, r: 300 });
+    expect(readProjectState(doc).vsumCircle).toEqual({ cx: 1, cy: 2, r: 300 });
+
+    for (const invalid of [{ cx: 1, cy: 2, r: 0 }, { cx: 'a', cy: 2, r: 300 }, { cx: 1, cy: 2 }, 5, null]) {
+      doc.getMap(LAYOUT).set(LAYOUT_VSUM_CIRCLE, invalid);
+      expect(readProjectState(doc).vsumCircle).toBeNull();
+    }
+  });
+
+  it('is a change when it is new or different, not when it is the same or removed', () => {
+    const doc = buildDocument();
+    const without = readProjectState(doc);
+    doc.getMap(LAYOUT).set(LAYOUT_VSUM_CIRCLE, { cx: 1, cy: 2, r: 300 });
+    const first = readProjectState(doc);
+    doc.getMap(LAYOUT).set(LAYOUT_VSUM_CIRCLE, { cx: 1, cy: 2, r: 400 });
+    const second = readProjectState(doc);
+
+    expect(diffProjectState(without, first).vsumCircle).toEqual({ cx: 1, cy: 2, r: 300 });
+    expect(diffProjectState(first, second).vsumCircle).toEqual({ cx: 1, cy: 2, r: 400 });
+    expect(hasChanges(diffProjectState(first, second))).toBe(true);
+    expect(diffProjectState(second, readProjectState(doc)).vsumCircle).toBeUndefined();
+    expect(diffProjectState(second, without).vsumCircle).toBeUndefined();
   });
 });

@@ -102,6 +102,8 @@ function collaborationMock() {
     pushLocalChanges: vi.fn(),
     pushMappings: vi.fn(),
     pushReactionLayout: vi.fn(),
+    pushVsumCircle: vi.fn(),
+    seedVsumCircle: vi.fn(),
     removeModel: vi.fn(),
     removeRelation: vi.fn(),
     undo: vi.fn(() => true),
@@ -327,6 +329,38 @@ describe('writing the changes of the user into the project', () => {
     act(() => { vi.advanceTimersByTime(1000); });
 
     expect(collaboration.pushLocalChanges).not.toHaveBeenCalled();
+  });
+});
+
+describe('the shared VSUM circle', () => {
+  const circle = { cx: 0, cy: 0, r: 300 };
+  /** Whether a box (as large as the circle checks it) at this position lies inside the circle. */
+  const inside = (p: { x: number; y: number }, c: { cx: number; cy: number; r: number }) =>
+    [[0, 0], [280, 0], [0, 180], [280, 180]].every(([dx, dy]) => Math.hypot(p.x + dx - c.cx, p.y + dy - c.cy) <= c.r + 1);
+
+  it('does not move boxes until the circle is confirmed as the shared one', () => {
+    initial.nodes = [box(1, 0, 0), box(2, 2000, 0)];
+    const collaboration = collaborationMock();
+    const { ref } = renderCanvas({ collaboration, canvasMode: 'views' });
+
+    act(() => ref.current.setVsumCircle(circle, false));
+    expect(ref.current.getNodes().find((n: Node) => n.id === 'ecore-2').position).toEqual({ x: 2000, y: 0 });
+  });
+
+  it('places a box the user adds inside the circle, so that the circle does not grow', () => {
+    initial.nodes = [];
+    const collaboration = collaborationMock();
+    const { ref } = renderCanvas({ collaboration });
+    const far = { cx: 5000, cy: 5000, r: 400 };
+    act(() => ref.current.setVsumCircle(far, true));
+    collaboration.pushVsumCircle.mockClear();
+
+    act(() => {
+      ref.current.addEcoreFile('M4.ecore', '<ecore:EPackage name="m4"/>', { metaModelId: 4, metaModelSourceId: 4 });
+    });
+
+    expect(inside(ref.current.getNodes().find((n: Node) => n.id === 'ecore-4').position, far)).toBe(true);
+    expect(collaboration.pushVsumCircle).not.toHaveBeenCalled();
   });
 });
 
