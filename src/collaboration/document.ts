@@ -57,6 +57,12 @@ export const EPOCH_PARAM = 'epoch';
  * belongs to an earlier room of the project. The client must start again with a new, empty document.
  */
 export const OUTDATED_DOCUMENT_CLOSE_CODE = 4409;
+/**
+ * WebSocket close code with which the server closes the connections of a project that was moved to
+ * the trash or deleted. Changes that weren't written back are lost. Reconnecting is rejected with
+ * `403` until the project is restored from the trash, so clients shouldn't reconnect on their own.
+ */
+export const PROJECT_REMOVED_CLOSE_CODE = 4410;
 
 /** Fields every element has. */
 export interface SoftDeletable {

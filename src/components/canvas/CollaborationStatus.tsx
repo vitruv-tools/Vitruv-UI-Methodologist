@@ -16,6 +16,10 @@ export interface CollaborationStatusProps {
 
 type Tone = 'warning' | 'error';
 
+/** What the user is told when the open project was moved to the trash or deleted. */
+export const PROJECT_REMOVED_MESSAGE =
+  'This project was moved to the trash or deleted. Changes that were not saved yet are lost.';
+
 const TONES: Record<Tone, { background: string; color: string; border: string }> = {
   warning: { background: '#fff8e1', color: '#7a5200', border: '#f0c24b' },
   error: { background: '#fdecea', color: '#8a1f17', border: '#e57373' },
@@ -34,6 +38,10 @@ export const CollaborationStatus: React.FC<CollaborationStatusProps> = ({
   failure,
   unavailable = false,
 }) => {
+  // A removed project can't be joined either; that it was removed is what the user needs to know.
+  if (failure === 'removed') {
+    return banner('error', 'alert', PROJECT_REMOVED_MESSAGE);
+  }
   if (unavailable) {
     return banner(
       'error',
