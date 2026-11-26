@@ -5,6 +5,7 @@ import { loadReactionLayout, saveReactionLayout, type ReactionLayoutMap } from '
 import { createCanvasPort, type CanvasHandle, type ResolvedMetaModel } from './canvasPort';
 import { CanvasSync } from './canvasSync';
 import type { ProjectDocument } from './projectDocument';
+import type { ModelState } from './projectState';
 import type { ConnectionSnapshot, createProjectConnection } from './projectConnection';
 import { useProjectConnection } from './useProjectConnection';
 
@@ -19,8 +20,8 @@ export interface UseCanvasCollaborationOptions {
   instanceId: string | null;
   /** The canvas, or `null` if it isn't there. */
   getCanvas: () => CanvasHandle | null;
-  /** Finds a metamodel another user added and loads its ecore file. */
-  resolveMetaModel: (sourceId: number) => Promise<ResolvedMetaModel | null>;
+  /** Loads the ecore file of a metamodel another user added, from the project's copy. */
+  resolveMetaModel: (model: ModelState) => Promise<ResolvedMetaModel | null>;
   /** The collaboration server's address. Defaults to `REACT_APP_COLLABORATION_URL`. */
   serverUrl?: string;
   /** Defaults to the real connection; tests replace it. */
@@ -85,7 +86,7 @@ export function useCanvasCollaboration(options: UseCanvasCollaborationOptions): 
       document,
       createCanvasPort({
         getCanvas: () => latest.current.getCanvas(),
-        resolveMetaModel: (sourceId) => latest.current.resolveMetaModel(sourceId),
+        resolveMetaModel: (model) => latest.current.resolveMetaModel(model),
         loadReactionLayout: () => loadReactionLayout(projectId),
         saveReactionLayout: (layout) => saveReactionLayout(projectId, layout as ReactionLayoutMap),
         updateRelations: (update) => {

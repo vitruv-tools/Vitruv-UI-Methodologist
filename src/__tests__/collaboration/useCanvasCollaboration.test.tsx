@@ -51,7 +51,7 @@ function setup(overrides: Partial<UseCanvasCollaborationOptions> = {}, canvas = 
     canvasLoaded: true,
     instanceId: 'tab-1',
     getCanvas: () => canvas.handle,
-    resolveMetaModel: async (sourceId) => ({ fileName: `M${sourceId}.ecore`, fileContent: '<x/>', meta: { metaModelSourceId: sourceId, metaModelId: sourceId } }),
+    resolveMetaModel: async ({ sourceId }) => ({ fileName: `M${sourceId}.ecore`, fileContent: '<x/>', meta: { metaModelSourceId: sourceId, metaModelId: sourceId } }),
     serverUrl: server.url,
     createConnection: (o: ProjectConnectionOptions) =>
       createProjectConnection({ ...o, WebSocketPolyfill: NodeWebSocket as unknown as typeof WebSocket, maxBackoffMs: 20 }),

@@ -1,6 +1,6 @@
 import type { Edge, Node } from 'reactflow';
 import { createCanvasPort, type CanvasHandle, type CanvasPortDeps } from '../../collaboration/canvasPort';
-import { pairKey, type ProjectChanges } from '../../collaboration/projectState';
+import { pairKey, type ModelState, type ProjectChanges } from '../../collaboration/projectState';
 import type { EditableVsumMetaModelRelation } from '../../types/EditableVsumDetails';
 
 const noChanges = (): ProjectChanges => ({
@@ -8,6 +8,7 @@ const noChanges = (): ProjectChanges => ({
   removedModels: [],
   renamedModels: [],
   movedModels: [],
+  copiedModels: [],
   upsertedRelations: [],
   removedRelations: [],
   reactionLayout: undefined,
@@ -35,7 +36,7 @@ function port(overrides: Partial<CanvasPortDeps> = {}, canvas = fakeCanvas()) {
   const saved: Record<string, unknown>[] = [];
   const deps: CanvasPortDeps = {
     getCanvas: () => canvas.handle,
-    resolveMetaModel: vi.fn(async (sourceId: number) => ({
+    resolveMetaModel: vi.fn(async ({ sourceId }: ModelState) => ({
       fileName: `M${sourceId}.ecore`,
       fileContent: `<ecore ${sourceId}/>`,
       meta: { metaModelId: sourceId, metaModelSourceId: sourceId, ecoreFileId: sourceId + 500 },
@@ -113,7 +114,7 @@ describe('showing changes of the shared project', () => {
 
   it('adds metamodels one after the other, and carries on if one cannot be found', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const resolveMetaModel = vi.fn(async (id: number) => (id === 4 ? null : { fileName: `M${id}.ecore`, fileContent: '', meta: { metaModelSourceId: id } }));
+    const resolveMetaModel = vi.fn(async ({ sourceId: id }: ModelState) => (id === 4 ? null : { fileName: `M${id}.ecore`, fileContent: '', meta: { metaModelSourceId: id } }));
     const t = port({ resolveMetaModel });
 
     await t.port.apply({
@@ -128,7 +129,7 @@ describe('showing changes of the shared project', () => {
 
   it('carries on if a metamodel cannot be loaded', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const resolveMetaModel = vi.fn(async (id: number) => {
+    const resolveMetaModel = vi.fn(async ({ sourceId: id }: ModelState) => {
       if (id === 4) throw new Error('offline');
       return { fileName: `M${id}.ecore`, fileContent: '', meta: { metaModelSourceId: id } };
     });

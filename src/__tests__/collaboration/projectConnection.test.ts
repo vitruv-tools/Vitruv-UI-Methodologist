@@ -4,7 +4,7 @@ import * as Y from 'yjs';
 import { EPOCH, STATUS, WRITEBACK_ERROR } from '../../collaboration/document';
 import { createProjectConnection, type ProjectConnection, type ProjectConnectionOptions } from '../../collaboration/projectConnection';
 import { startFakeCollaborationServer, type FakeCollaborationServer } from './fakeCollaborationServer';
-import { buildDocument } from './testDocuments';
+import { buildDocument, copyOf } from './testDocuments';
 
 const ROOM = 'vsum:12';
 
@@ -73,8 +73,8 @@ describe('connecting', () => {
 
     expect(server.connections).toEqual([{ room: ROOM, token: 'token-1', epoch: null, accepted: true }]);
     expect([...connection.getSnapshot().project.read().models.values()]).toEqual([
-      { sourceId: 1, name: 'Car', position: { x: 1, y: 2 } },
-      { sourceId: 2, name: 'Brake', position: null },
+      { sourceId: 1, name: 'Car', position: { x: 1, y: 2 }, copy: copyOf(1) },
+      { sourceId: 2, name: 'Brake', position: null, copy: copyOf(2) },
     ]);
   });
 
@@ -218,8 +218,8 @@ describe('a document of an earlier room (close code 4409)', () => {
     expect(accepted().map((c) => c.epoch)).toEqual([null, 'epoch-1', null]);
     // Nothing of the old document reached the room.
     expect(server.room(ROOM).getMap('models').toJSON()).toEqual({
-      '1': { name: 'Car', softDeleted: false, softDeletedVia: null },
-      '3': { name: 'Wheel', softDeleted: false, softDeletedVia: null },
+      '1': { name: 'Car', ...copyOf(1), softDeleted: false, softDeletedVia: null },
+      '3': { name: 'Wheel', ...copyOf(3), softDeleted: false, softDeletedVia: null },
     });
   });
 

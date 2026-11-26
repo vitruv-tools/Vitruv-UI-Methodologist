@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import { ProjectDocument } from '../../collaboration/projectDocument';
 import { pairKey } from '../../collaboration/projectState';
-import { buildDocument, sync } from './testDocuments';
+import { buildDocument, copyOf, sync } from './testDocuments';
 
 /** A project with three metamodels, and one relation between the first two. */
 function project() {
@@ -74,7 +74,7 @@ describe('undoing and redoing own changes', () => {
 
     p.undo();
 
-    expect(p.read().models.get(1)).toEqual({ sourceId: 1, name: 'Car', position: { x: 0, y: 0 } });
+    expect(p.read().models.get(1)).toEqual({ sourceId: 1, name: 'Car', position: { x: 0, y: 0 }, copy: copyOf(1) });
     expect(p.read().relations.get(pairKey(1, 2))?.reactionFileId).toBe(30);
     expect(p.history().canUndo).toBe(false);
   });
