@@ -496,8 +496,6 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
     const selectedFileIdsRef = useRef(selectedFileIds);
     selectedFileIdsRef.current = selectedFileIds;
-    /** The selected model when exactly one is selected. */
-    const selectedFileId = selectedFileIds.length === 1 ? selectedFileIds[0] : null;
     const selectOnlyFile = useCallback((id: string | null) => {
       setSelectedFileIds(id ? [id] : []);
     }, []);
