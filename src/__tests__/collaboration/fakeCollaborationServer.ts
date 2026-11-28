@@ -6,7 +6,13 @@ import * as awarenessProtocol from 'y-protocols/awareness';
 import * as syncProtocol from 'y-protocols/sync';
 import { WebSocketServer, type WebSocket as ServerSocket } from 'ws';
 import * as Y from 'yjs';
-import { EPOCH, EPOCH_PARAM, OUTDATED_DOCUMENT_CLOSE_CODE, STATUS } from '../../collaboration/document';
+import {
+  EPOCH,
+  EPOCH_PARAM,
+  OUTDATED_DOCUMENT_CLOSE_CODE,
+  PROJECT_REMOVED_CLOSE_CODE,
+  STATUS,
+} from '../../collaboration/document';
 
 const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
@@ -29,6 +35,11 @@ export interface FakeCollaborationServer {
   room(name: string): Y.Doc;
   /** Replaces the room's document, like a server that dropped the room and loaded it again. */
   recreateRoom(name: string, doc: Y.Doc): void;
+  /**
+   * Drops the room like a server whose project was moved to the trash: closes its clients with
+   * `4410`, and answers new connections to it with `403` until it is created again.
+   */
+  removeRoom(name: string): void;
   /** Disconnects all clients of a room, without closing the server. */
   disconnectAll(): void;
   /** The tokens that are accepted; every token if `undefined`. */
@@ -41,13 +52,16 @@ export interface FakeCollaborationServer {
 /**
  * Starts a WebSocket server that speaks the y-websocket protocol, like the collaboration server: a
  * client that sends the epoch of its document (`?epoch=`) is closed with `4409` if the room has
- * another one, or doesn't exist. A client without epoch joins the room, if it exists.
+ * another one, or doesn't exist. A client without epoch joins the room, if it exists. A removed
+ * room's clients are closed with `4410`, and new connections to it are refused.
  */
 export async function startFakeCollaborationServer(
   initialRooms: Record<string, Y.Doc> = {},
 ): Promise<FakeCollaborationServer> {
   const rooms = new Map<string, Y.Doc>(Object.entries(initialRooms));
-  const clients = new Set<ServerSocket>();
+  const removedRooms = new Set<string>();
+  /** The connected clients, with the room each is in. */
+  const clients = new Map<ServerSocket, string>();
   /** Awareness is relayed between the clients of a room, like y-websocket's server does; it isn't saved. */
   const awarenesses = new Map<Y.Doc, awarenessProtocol.Awareness>();
   const connections: Connection[] = [];
@@ -66,10 +80,15 @@ export async function startFakeCollaborationServer(
     const room = decodeURIComponent(url.pathname.slice(1));
     const token = url.searchParams.get('token');
     const epoch = url.searchParams.get(EPOCH_PARAM);
-    const accepted = state.acceptedTokens === undefined || (token !== null && state.acceptedTokens.has(token));
+    const authorized = state.acceptedTokens === undefined || (token !== null && state.acceptedTokens.has(token));
+    const accepted = authorized && !removedRooms.has(room);
     connections.push({ room, token, epoch, accepted });
-    if (!accepted) {
+    if (!authorized) {
       socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
+      return;
+    }
+    if (!accepted) {
+      socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
       return;
     }
     webSockets.handleUpgrade(request, socket, head, (webSocket) => {
@@ -83,12 +102,12 @@ export async function startFakeCollaborationServer(
         webSocket.close(1011, 'No such room');
         return;
       }
-      join(doc, webSocket);
+      join(room, doc, webSocket);
     });
   });
 
-  function join(doc: Y.Doc, webSocket: ServerSocket): void {
-    clients.add(webSocket);
+  function join(room: string, doc: Y.Doc, webSocket: ServerSocket): void {
+    clients.set(webSocket, room);
     let awareness = awarenesses.get(doc);
     if (awareness === undefined) {
       awareness = new awarenessProtocol.Awareness(doc);
@@ -165,10 +184,20 @@ export async function startFakeCollaborationServer(
       return doc;
     },
     recreateRoom(name, doc) {
+      removedRooms.delete(name);
       rooms.set(name, doc);
     },
+    removeRoom(name) {
+      rooms.delete(name);
+      removedRooms.add(name);
+      for (const [client, room] of clients) {
+        if (room === name) {
+          client.close(PROJECT_REMOVED_CLOSE_CODE, 'Project removed');
+        }
+      }
+    },
     disconnectAll() {
-      for (const client of clients) {
+      for (const client of clients.keys()) {
         client.terminate();
       }
     },
@@ -186,7 +215,7 @@ export async function startFakeCollaborationServer(
     },
     close: () =>
       new Promise((resolve) => {
-        for (const client of clients) {
+        for (const client of clients.keys()) {
           client.terminate();
         }
         webSockets.close();

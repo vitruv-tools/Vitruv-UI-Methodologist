@@ -93,10 +93,16 @@ import {
 import { downloadBlobAsFile } from '../utils/downloadFile';
 import { syncVsumWorkspaceChanges } from '../utils/vsumSyncSave';
 import { canvasCollaborationProps, shownLoadState } from '../collaboration/canvasCollaborationProps';
-import { CollaborationStatus, collaborationStatusProps } from '../components/canvas/CollaborationStatus';
+import {
+  CollaborationStatus,
+  collaborationStatusProps,
+  PROJECT_REMOVED_MESSAGE,
+} from '../components/canvas/CollaborationStatus';
+import { useToast } from '../components/ui/ToastProvider';
 import { useCanvasCollaboration } from '../collaboration/useCanvasCollaboration';
 import { cursorDisplayName } from '../collaboration/cursorPresence';
 import type { ResolvedMetaModel } from '../collaboration/canvasPort';
+import type { ProjectDocument } from '../collaboration/projectDocument';
 import {
   getCanvasProjectLoadFailureState,
   type CanvasProjectLoadState,
@@ -323,6 +329,7 @@ export const CanvasPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+  const { showError } = useToast();
   const flowCanvasRef = useRef<any>(null);
 
   const [vsumName, setVsumName] = useState<string>('');
@@ -1250,6 +1257,22 @@ export const CanvasPage: React.FC = () => {
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [isViewOnly, activeProjectId, activeInstanceId, loadVsum, navigate, showPopup, collaboration.sync]);
+
+  // The project was moved to the trash or deleted: the collaboration server dropped its room and
+  // refuses to connect again, so its tab is closed. The message is a toast, since the page is left
+  // when it was the last tab.
+  const removedProject = collaboration.connection?.failure === 'removed' ? collaboration.connection.project : null;
+  const leftRemovedProjectRef = useRef<ProjectDocument | null>(null);
+  useEffect(() => {
+    // Until the next tab has its own connection, the page still gets this one, and this runs again
+    // when `navigate` changes with the location: leave the project only once.
+    if (removedProject === null || leftRemovedProjectRef.current === removedProject) return;
+    leftRemovedProjectRef.current = removedProject;
+    showError(PROJECT_REMOVED_MESSAGE);
+    const instanceId = activeInstanceIdRef.current;
+    if (instanceId) performCloseTab(instanceId);
+    else navigate('/');
+  }, [removedProject, showError, performCloseTab, navigate]);
 
   // Switch tabs: capture leaving tab, restore or load active tab
   useEffect(() => {

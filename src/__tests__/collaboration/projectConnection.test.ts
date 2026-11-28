@@ -258,6 +258,41 @@ describe('a document of an earlier room (close code 4409)', () => {
   });
 });
 
+describe('a project moved to the trash or deleted (close code 4410)', () => {
+  it('says that the project was removed, and tells the listeners', async () => {
+    const connection = await syncedConnection();
+    const failures: (string | null)[] = [];
+    connection.subscribe(() => failures.push(connection.getSnapshot().failure));
+
+    server.removeRoom(ROOM);
+
+    await vi.waitFor(() => expect(connection.getSnapshot().failure).toBe('removed'));
+    expect(failures).toContain('removed');
+    expect(connection.getSnapshot()).toMatchObject({ status: 'disconnected', synced: false });
+  });
+
+  it('stops connecting, since the server refuses every connection until the project is restored', async () => {
+    const connection = await syncedConnection();
+
+    server.removeRoom(ROOM);
+    await vi.waitFor(() => expect(connection.getSnapshot().failure).toBe('removed'));
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    expect(server.connections).toHaveLength(1);
+  });
+
+  it('does not start again with a new document, as it does for an outdated one', async () => {
+    const connection = await syncedConnection();
+    const before = connection.getSnapshot();
+
+    server.removeRoom(ROOM);
+    await vi.waitFor(() => expect(connection.getSnapshot().failure).toBe('removed'));
+
+    expect(connection.getSnapshot().generation).toBe(before.generation);
+    expect(connection.getSnapshot().project).toBe(before.project);
+  });
+});
+
 describe('what the server reports', () => {
   it('shows the reason of a failed writeback, and clears it', async () => {
     const connection = await syncedConnection();

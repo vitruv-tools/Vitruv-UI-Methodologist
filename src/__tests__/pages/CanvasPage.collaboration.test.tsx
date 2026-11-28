@@ -13,6 +13,8 @@ const collaboration: { current: CollaborationState } = vi.hoisted(() => ({ curre
 const canvasProps: { current: any } = vi.hoisted(() => ({ current: null }));
 /** What the page calls on the canvas for Undo and Redo. */
 const canvasHistory = vi.hoisted(() => ({ undo: vi.fn(), redo: vi.fn() }));
+/** The app's toasts, which stay when the page is left. */
+const toast = vi.hoisted(() => ({ showSuccess: vi.fn(), showError: vi.fn(), showInfo: vi.fn() }));
 
 vi.mock('../../collaboration/useCanvasCollaboration', () => ({
   useCanvasCollaboration: () => collaboration.current,
@@ -28,6 +30,17 @@ vi.mock('react-router-dom', async () => ({
 vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({
     user: { id: '1', username: 'tester', email: 'tester@example.com', givenName: 'Test', familyName: 'User', emailVerified: true },
+  }),
+}));
+
+// New functions on every render, as `navigate` is after the location changed: the page must still
+// act on a failure only once.
+vi.mock('../../components/ui/ToastProvider', async () => ({
+  ...(await vi.importActual<any>('../../components/ui/ToastProvider')),
+  useToast: () => ({
+    showSuccess: (...args: unknown[]) => toast.showSuccess(...args),
+    showError: (...args: unknown[]) => toast.showError(...args),
+    showInfo: (...args: unknown[]) => toast.showInfo(...args),
   }),
 }));
 
@@ -242,6 +255,8 @@ describe('with live collaboration', () => {
     await waitForProject('Project A');
 
     expect(screen.getByRole('alert')).toHaveTextContent('Reload the page');
+    expect(screen.getByRole('tab', { name: /Project A/ })).toBeInTheDocument();
+    expect(toast.showError).not.toHaveBeenCalled();
   });
 
   it('loads a tab again when switching back to it, so that its canvas shows the shared project, not an old copy', async () => {
@@ -297,5 +312,45 @@ describe('when the collaboration server cannot be reached', () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(apiService.syncVsumChanges).not.toHaveBeenCalled();
+  });
+});
+
+describe('when the project is moved to the trash or deleted', () => {
+  const removed = () => live({ status: 'disconnected', synced: false, failure: 'removed' });
+
+  beforeEach(() => {
+    collaboration.current = live();
+  });
+
+  it('says so, that unsaved changes are lost, and leaves the project', async () => {
+    const { rerender } = render(<CanvasPage />);
+    await waitForProject('Project A');
+
+    collaboration.current = removed();
+    rerender(<CanvasPage />);
+
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/'));
+    expect(toast.showError).toHaveBeenCalledTimes(1);
+    expect(toast.showError).toHaveBeenCalledWith(expect.stringContaining('moved to the trash or deleted'));
+    expect(toast.showError).toHaveBeenCalledWith(expect.stringContaining('not saved yet are lost'));
+    expect(screen.queryByRole('tab', { name: /Project A/, hidden: true })).not.toBeInTheDocument();
+  });
+
+  it('closes only its tab and goes on with the other one, which it does not leave as well', async () => {
+    const { rerender } = render(<CanvasPage />);
+    await waitForProject('Project A');
+    mockRouteId = '20';
+    rerender(<CanvasPage />);
+    await waitForProject('Project B');
+
+    // The page still gets the removed project's connection until the next tab has its own.
+    collaboration.current = removed();
+    rerender(<CanvasPage />);
+
+    await waitFor(() => expect(screen.queryByRole('tab', { name: /Project B/, hidden: true })).not.toBeInTheDocument());
+    await waitForProject('Project A');
+    expect(mockNavigate).toHaveBeenCalledWith('/canvas/10', { replace: true });
+    expect(mockNavigate).not.toHaveBeenCalledWith('/');
+    expect(toast.showError).toHaveBeenCalledTimes(1);
   });
 });

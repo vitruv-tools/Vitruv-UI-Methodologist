@@ -30,6 +30,12 @@ vi.mock('../../contexts/AuthContext', () => ({
   }),
 }));
 
+// The page is rendered without the app's ToastProvider.
+vi.mock('../../components/ui/ToastProvider', async () => ({
+  ...(await vi.importActual<any>('../../components/ui/ToastProvider')),
+  useToast: () => ({ showSuccess: vi.fn(), showError: vi.fn(), showInfo: vi.fn() }),
+}));
+
 vi.mock('../../components/flow/FlowCanvas', async () => {
   const React = (await import('react'));
   return {

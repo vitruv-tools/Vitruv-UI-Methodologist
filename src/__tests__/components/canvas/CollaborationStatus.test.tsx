@@ -32,6 +32,16 @@ describe('CollaborationStatus', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
+  it.each([false, true])('says the project was moved to the trash or deleted, and that unsaved changes are lost (joined: %s)', (joined) => {
+    render(<CollaborationStatus {...live} status="disconnected" synced={false} failure="removed" unavailable={!joined} />);
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('moved to the trash or deleted');
+    expect(alert).toHaveTextContent('not saved yet are lost');
+    expect(alert).not.toHaveTextContent('Reload the page');
+    expect(alert).not.toHaveTextContent('collaboration server');
+  });
+
   it('says the project can be looked at but not changed if it could not be joined', () => {
     render(<CollaborationStatus {...live} status="connecting" synced={false} unavailable />);
 

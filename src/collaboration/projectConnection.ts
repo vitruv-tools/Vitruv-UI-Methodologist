@@ -1,7 +1,14 @@
 import { WebsocketProvider } from 'y-websocket';
 import type { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
-import { EPOCH, EPOCH_PARAM, OUTDATED_DOCUMENT_CLOSE_CODE, STATUS, WRITEBACK_ERROR } from './document';
+import {
+  EPOCH,
+  EPOCH_PARAM,
+  OUTDATED_DOCUMENT_CLOSE_CODE,
+  PROJECT_REMOVED_CLOSE_CODE,
+  STATUS,
+  WRITEBACK_ERROR,
+} from './document';
 import { ProjectDocument } from './projectDocument';
 
 /** How long the client waits at most before it tries to connect again. */
@@ -20,6 +27,11 @@ export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 export type ConnectionFailure =
   /** The server kept saying that the document is outdated. */
   | 'outdated'
+  /**
+   * The project was moved to the trash or deleted (`4410`). The server dropped its room without
+   * writing it back, so changes that weren't saved yet are lost.
+   */
+  | 'removed'
   /** The server refused the connection in a way that connecting again can't change. */
   | 'rejected';
 
@@ -123,7 +135,7 @@ interface Session {
 /**
  * Connects to the room of a project on the collaboration server and keeps the connection: the
  * client reconnects by itself, and starts again with a new document if the server says the old one
- * belongs to an earlier room.
+ * belongs to an earlier room. It stops for good if the project was moved to the trash or deleted.
  */
 export function createProjectConnection(options: ProjectConnectionOptions): ProjectConnection {
   const { serverUrl, projectId, getToken, refreshToken, WebSocketPolyfill, maxBackoffMs = DEFAULT_MAX_BACKOFF_MS } = options;
@@ -185,6 +197,9 @@ export function createProjectConnection(options: ProjectConnectionOptions): Proj
       }
       if (code === OUTDATED_DOCUMENT_CLOSE_CODE) {
         startAgain();
+      } else if (code === PROJECT_REMOVED_CLOSE_CODE) {
+        // The server refuses every new connection until the project is restored from the trash.
+        giveUp('removed');
       } else {
         giveUp('rejected');
       }
