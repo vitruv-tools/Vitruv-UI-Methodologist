@@ -8,6 +8,7 @@ import {
   MODELS,
   NOT_DELETED,
   RELATIONS,
+  type CopyFields,
   type ModelFields,
   type Position,
   type RelationFields,
@@ -142,7 +143,8 @@ export class ProjectDocument {
         setIfChanged(existing, 'softDeleted', false);
         setIfChanged(existing, 'softDeletedVia', null);
       } else {
-        models.set(key, element<ModelFields>({ name: model.name, ...NOT_DELETED }));
+        // Without the copy's IDs: only the server writes them, once the backend made the copy.
+        models.set(key, element<Omit<ModelFields, keyof CopyFields>>({ name: model.name, ...NOT_DELETED }));
       }
       this.setPosition(key, model.position);
     });

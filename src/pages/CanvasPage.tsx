@@ -11,7 +11,8 @@ import { apiService, VsumRole, VsumUserResponse } from '../services/api';
 import type { EditableVsumDetails, VsumDetails } from '../types';
 import { appendMetaModelVersion } from '../utils/metaModelVersion';
 import { useProjectStore } from '../store/Project';
-import { findProjectMetaModel } from '../collaboration/findProjectMetaModel';
+import { loadSharedMetaModel } from '../collaboration/loadSharedMetaModel';
+import type { ModelState } from '../collaboration/projectState';
 import { createVsumDetailsStore, getVsumDetailsStore, hasVsumDetailsStore } from '../store/VsumDetails';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../types/workspace';
 import { MODAL_Z_INDEX, isAnyModalOpen, useModalBodyLock } from '../components/ui/modalUtils';
@@ -503,32 +504,11 @@ export const CanvasPage: React.FC = () => {
   const libraryModelsRef = useRef({ drawerModels, myLibraryModels, publicLibraryModels });
   libraryModelsRef.current = { drawerModels, myLibraryModels, publicLibraryModels };
 
-  /** Finds a metamodel another user added to the project, and loads its ecore file. */
-  const resolveSharedMetaModel = useCallback(async (sourceId: number): Promise<ResolvedMetaModel | null> => {
+  /** Loads a metamodel another user added to the project, from the project's copy. */
+  const resolveSharedMetaModel = useCallback((model: ModelState): Promise<ResolvedMetaModel | null> => {
     const { drawerModels: inProject, myLibraryModels: mine, publicLibraryModels: shared } = libraryModelsRef.current;
-    let model: DrawerModel | undefined = [...inProject, ...mine, ...shared].find(m => m.sourceId === sourceId);
-    if (!model) {
-      // Not in a library this user can see, e.g. a private one: it is in the project once saved.
-      const saved = activeProjectId === undefined ? null : await findProjectMetaModel(activeProjectId, sourceId);
-      if (saved) model = metaModelToDrawerModel(saved, true);
-    }
-    if (!model?.ecoreFileId) return null;
-    const fileContent = await apiService.getFile(model.ecoreFileId);
-    return {
-      fileName: `${appendMetaModelVersion(model.name, model.version)}.ecore`,
-      fileContent,
-      meta: {
-        version: model.version,
-        domain: model.domain,
-        description: model.description,
-        metaModelId: model.id,
-        // The shared project and sync-changes know metamodels by this library ID.
-        metaModelSourceId: model.sourceId ?? model.id,
-        ecoreFileId: model.ecoreFileId,
-        genModelFileId: model.genModelFileId,
-      },
-    };
-  }, [activeProjectId]);
+    return loadSharedMetaModel(model, [...inProject, ...mine, ...shared]);
+  }, []);
   const getCanvasHandle = useCallback(() => flowCanvasRef.current ?? null, []);
   const collaboration = useCanvasCollaboration({
     projectId: activeProjectId,

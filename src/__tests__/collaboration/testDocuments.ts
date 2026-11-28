@@ -1,5 +1,14 @@
 import * as Y from 'yjs';
-import { LAYOUT, LAYOUT_META_MODELS, LAYOUT_REACTIONS, MODELS, NOT_DELETED, RELATIONS, STATUS } from '../../collaboration/document';
+import {
+  LAYOUT,
+  LAYOUT_META_MODELS,
+  LAYOUT_REACTIONS,
+  MODELS,
+  NOT_DELETED,
+  RELATIONS,
+  STATUS,
+  type CopyFields,
+} from '../../collaboration/document';
 
 export interface TestModel {
   id: number;
@@ -7,6 +16,13 @@ export interface TestModel {
   x?: number;
   y?: number;
   softDeleted?: boolean;
+  /** The project's copy; defaults to {@link copyOf} `id`, as the server fills it. `null` for none. */
+  copy?: CopyFields | null;
+}
+
+/** The copy the test documents give the metamodel `id` by default. */
+export function copyOf(id: number): CopyFields {
+  return { projectMetaModelId: 100 + id, ecoreFileId: 500 + id, genModelFileId: null };
 }
 
 export interface TestRelation {
@@ -34,7 +50,14 @@ export function buildDocument(
     for (const model of models) {
       modelMap.set(
         String(model.id),
-        new Y.Map<unknown>(Object.entries({ name: model.name ?? `Model ${model.id}`, ...NOT_DELETED, softDeleted: model.softDeleted ?? false })),
+        new Y.Map<unknown>(
+          Object.entries({
+            name: model.name ?? `Model ${model.id}`,
+            ...(model.copy === undefined ? copyOf(model.id) : (model.copy ?? NO_COPY)),
+            ...NOT_DELETED,
+            softDeleted: model.softDeleted ?? false,
+          }),
+        ),
       );
       if (model.x !== undefined && model.y !== undefined) {
         positions.set(String(model.id), { x: model.x, y: model.y });
@@ -62,6 +85,19 @@ export function buildDocument(
     doc.getMap(STATUS).set('epoch', epoch);
   }, 'server');
   return doc;
+}
+
+const NO_COPY: CopyFields = { projectMetaModelId: null, ecoreFileId: null, genModelFileId: null };
+
+/**
+ * Fills in the IDs of the project's copy of a metamodel, as the server does after it wrote the
+ * metamodel back.
+ */
+export function saveCopy(doc: Y.Doc, id: number, copy: CopyFields = copyOf(id)): void {
+  doc.transact(() => {
+    const model = doc.getMap(MODELS).get(String(id)) as Y.Map<unknown>;
+    for (const [field, value] of Object.entries(copy)) model.set(field, value);
+  }, 'server');
 }
 
 /** Copies the whole state of `from` into `to`, like a client that syncs with the server. */

@@ -6,6 +6,7 @@ import {
   LAYOUT_VSUM_CIRCLE,
   MODELS,
   RELATIONS,
+  type CopyFields,
   type ModelFields,
   type Position,
   type RelationFields,
@@ -19,7 +20,15 @@ export interface ModelState {
   name: string;
   /** Position on the canvas; `null` if the document has none. */
   position: Position | null;
+  /**
+   * The project's copy of the metamodel, whose files every member may read. Missing until the
+   * server saved a new metamodel, and on the canvas, which doesn't know it.
+   */
+  copy?: ModelCopy;
 }
+
+/** IDs of the project's copy of a metamodel; it always has an ecore file. */
+export type ModelCopy = CopyFields & { ecoreFileId: number };
 
 /** A relation between two metamodels as the document has it. */
 export interface RelationState {
@@ -51,6 +60,11 @@ export interface ProjectChanges {
   removedModels: number[];
   renamedModels: { sourceId: number; name: string }[];
   movedModels: { sourceId: number; position: Position }[];
+  /**
+   * Metamodels whose copy got new files, e.g. once the server saved a metamodel another user added.
+   * Not when a copy is removed.
+   */
+  copiedModels: ModelState[];
   /** Relations that are new or whose reaction file or mappings changed. */
   upsertedRelations: RelationState[];
   removedRelations: { sourceId: number; targetId: number }[];
@@ -71,6 +85,7 @@ export function hasChanges(changes: ProjectChanges): boolean {
     changes.removedModels.length > 0 ||
     changes.renamedModels.length > 0 ||
     changes.movedModels.length > 0 ||
+    changes.copiedModels.length > 0 ||
     changes.upsertedRelations.length > 0 ||
     changes.removedRelations.length > 0 ||
     changes.reactionLayout !== undefined ||
@@ -102,13 +117,30 @@ function readModels(doc: Y.Doc, positions: unknown): Map<number, ModelState> {
       continue;
     }
     const name = field<ModelFields>(element, 'name');
+    const copy = readCopy(element);
     models.set(sourceId, {
       sourceId,
       name: typeof name === 'string' ? name : '',
       position: positions instanceof Y.Map ? toPosition(positions.get(key)) : null,
+      ...(copy === undefined ? {} : { copy }),
     });
   }
   return models;
+}
+
+/** The project's copy of a metamodel, or `undefined` if it has no ecore file (yet). */
+function readCopy(element: Y.Map<unknown>): ModelCopy | undefined {
+  const ecoreFileId = field<ModelFields>(element, 'ecoreFileId');
+  if (!isId(ecoreFileId)) {
+    return undefined;
+  }
+  const projectMetaModelId = field<ModelFields>(element, 'projectMetaModelId');
+  const genModelFileId = field<ModelFields>(element, 'genModelFileId');
+  return {
+    projectMetaModelId: isId(projectMetaModelId) ? projectMetaModelId : null,
+    ecoreFileId,
+    genModelFileId: isId(genModelFileId) ? genModelFileId : null,
+  };
 }
 
 type RelationCandidate = RelationState & { backendId: number | null };
@@ -182,8 +214,14 @@ export function diffProjectState(
 function diffModels(
   previous: Map<number, ModelState>,
   next: Map<number, ModelState>,
-): Pick<ProjectChanges, 'addedModels' | 'removedModels' | 'renamedModels' | 'movedModels'> {
-  const changes: ReturnType<typeof diffModels> = { addedModels: [], removedModels: [], renamedModels: [], movedModels: [] };
+): Pick<ProjectChanges, 'addedModels' | 'removedModels' | 'renamedModels' | 'movedModels' | 'copiedModels'> {
+  const changes: ReturnType<typeof diffModels> = {
+    addedModels: [],
+    removedModels: [],
+    renamedModels: [],
+    movedModels: [],
+    copiedModels: [],
+  };
   for (const model of next.values()) {
     const before = previous.get(model.sourceId);
     if (before === undefined) {
@@ -195,6 +233,9 @@ function diffModels(
     }
     if (model.position !== null && !isSamePosition(before.position, model.position)) {
       changes.movedModels.push({ sourceId: model.sourceId, position: model.position });
+    }
+    if (model.copy !== undefined && model.copy.ecoreFileId !== before.copy?.ecoreFileId) {
+      changes.copiedModels.push(model);
     }
   }
   changes.removedModels = [...previous.keys()].filter((sourceId) => !next.has(sourceId));

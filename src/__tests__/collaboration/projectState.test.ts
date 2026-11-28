@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { LAYOUT, LAYOUT_META_MODELS, LAYOUT_REACTIONS, LAYOUT_VSUM_CIRCLE, MODELS, RELATIONS } from '../../collaboration/document';
 import { diffProjectState, hasChanges, pairKey, readProjectState } from '../../collaboration/projectState';
-import { buildDocument } from './testDocuments';
+import { buildDocument, copyOf, saveCopy } from './testDocuments';
 
 const LOW_CODE = { id: 5, sourceId: 'a', targetId: 'b', lowCodeReactionRequestBase: { name: 'x' } };
 
@@ -18,9 +18,26 @@ describe('readProjectState', () => {
     const state = readProjectState(doc);
 
     expect([...state.models.values()]).toEqual([
-      { sourceId: 1, name: 'Car', position: { x: 10, y: 20 } },
-      { sourceId: 2, name: 'Brake', position: null },
+      { sourceId: 1, name: 'Car', position: { x: 10, y: 20 }, copy: copyOf(1) },
+      { sourceId: 2, name: 'Brake', position: null, copy: copyOf(2) },
     ]);
+  });
+
+  it("reads the project's copy of a metamodel, and none before the server saved it", () => {
+    const doc = buildDocument({
+      models: [
+        { id: 1, copy: { projectMetaModelId: 101, ecoreFileId: 201, genModelFileId: 301 } },
+        { id: 2, copy: null },
+      ],
+    });
+    // A metamodel a client added, without any of the copy fields.
+    doc.getMap(MODELS).set('3', new Y.Map<unknown>(Object.entries({ name: 'Seat', softDeleted: false, softDeletedVia: null })));
+
+    const { models } = readProjectState(doc);
+
+    expect(models.get(1)?.copy).toEqual({ projectMetaModelId: 101, ecoreFileId: 201, genModelFileId: 301 });
+    expect(models.get(2)?.copy).toBeUndefined();
+    expect(models.get(3)?.copy).toBeUndefined();
   });
 
   it('leaves out soft-deleted metamodels', () => {
@@ -140,10 +157,23 @@ describe('diffProjectState', () => {
 
     const changes = diffProjectState(prev, next);
 
-    expect(changes.addedModels).toEqual([{ sourceId: 4, name: 'Tire', position: { x: 1, y: 1 } }]);
+    expect(changes.addedModels).toEqual([{ sourceId: 4, name: 'Tire', position: { x: 1, y: 1 }, copy: copyOf(4) }]);
     expect(changes.removedModels).toEqual([3]);
     expect(changes.renamedModels).toEqual([{ sourceId: 1, name: 'Vehicle' }]);
     expect(changes.movedModels).toEqual([{ sourceId: 2, position: { x: 9, y: 9 } }]);
+  });
+
+  it('finds metamodels whose copy got new files, but not one that lost its copy', () => {
+    const before = buildDocument({ models: [{ id: 1, copy: null }, { id: 2 }, { id: 3 }] });
+    const after = buildDocument({ models: [{ id: 1, copy: null }, { id: 2 }, { id: 3, copy: null }] });
+    saveCopy(after, 1);
+    saveCopy(after, 2, { ...copyOf(2), ecoreFileId: 999 });
+
+    const changes = diffProjectState(readProjectState(before), readProjectState(after));
+
+    expect(changes.copiedModels.map((model) => model.sourceId)).toEqual([1, 2]);
+    expect(changes.copiedModels[0].copy).toEqual(copyOf(1));
+    expect(hasChanges(changes)).toBe(true);
   });
 
   it('counts a position that appeared as a move, but not one that disappeared', () => {

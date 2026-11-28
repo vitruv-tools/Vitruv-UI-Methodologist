@@ -6,7 +6,7 @@
  * names the parts and their values; it doesn't depend on Yjs.
  *
  * ```
- * models     metaModelId → { name, softDeleted, softDeletedVia }
+ * models     metaModelId → { name, projectMetaModelId, ecoreFileId, genModelFileId, softDeleted, softDeletedVia }
  * relations  key → { backendId, sourceId, targetId, reactionFileId, fineGranular, softDeleted, softDeletedVia }
  * views      key → { backendId, name, description, fileStorageId, metaModelIds, softDeleted, softDeletedVia }
  * layout     { metaModels: metaModelId → { x, y }, reactions: …, vsumCircle: { cx, cy, r }, other stored keys }
@@ -22,7 +22,10 @@
  *   by a new UUID. The server fills in `backendId` once it wrote a new element back.
  * - Deleting an element only sets `softDeleted`. `softDeletedVia` is the key of the metamodel whose
  *   deletion also deleted the element. The server leaves soft-deleted elements out of the writeback.
- * - Only the server writes `status` and `backendId`.
+ * - Only the server writes `status`, `backendId` and the IDs of the project's copy of a metamodel
+ *   (`projectMetaModelId`, `ecoreFileId`, `genModelFileId`).
+ * - A change that adds a metamodel, or restores a deleted one, is written back right away, so that
+ *   the backend creates the project's copy and the server can fill in its IDs for the other users.
  */
 
 /** Top-level map of the metamodels, keyed by library metamodel ID. Values: {@link ModelFields}. */
@@ -66,9 +69,25 @@ export interface SoftDeletable {
 }
 
 /** Fields of a metamodel (a `Y.Map` in {@link MODELS}). */
-export interface ModelFields extends SoftDeletable {
+export interface ModelFields extends SoftDeletable, CopyFields {
   /** Name of the metamodel in this project. */
   name: string;
+}
+
+/**
+ * IDs of the project's own copy of a metamodel, which the backend makes when the metamodel is
+ * written back. Every member of the project may read the copy's files, unlike those of the library
+ * metamodel, which only its owner may read. Set by the server when it loads the project and after
+ * each writeback, always as the backend has them: `null` until a new metamodel is written back, and
+ * again once its deletion is. A client adds a metamodel without them.
+ */
+export interface CopyFields {
+  /** ID of the copy (`id` in `/details`). */
+  projectMetaModelId: number | null;
+  /** ID of the copy's ecore file. */
+  ecoreFileId: number | null;
+  /** ID of the copy's genmodel file, `null` if it has none. */
+  genModelFileId: number | null;
 }
 
 /** Fields of a relation between two metamodels (a `Y.Map` in {@link RELATIONS}). */

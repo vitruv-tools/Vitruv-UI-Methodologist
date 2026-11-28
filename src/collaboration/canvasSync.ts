@@ -299,6 +299,29 @@ export class CanvasSync {
     this.known = { ...known, models, relations: relationStates };
   }
 
+  /**
+   * What of the changes the canvas can show. A metamodel can only be shown with the ecore file of
+   * the project's copy: the library's file is only readable by its owner. So a metamodel another
+   * user added waits until the server saved it and filled in its copy (`copiedModels`). It is then
+   * shown as the project has it at that point, with its relations, which the canvas skipped while
+   * it waited.
+   */
+  private showable(changes: ProjectChanges, state: ProjectState): ProjectChanges {
+    const shown = this.canvas.read().models;
+    const added = new Set(changes.addedModels.map((model) => model.sourceId));
+    const arriving = changes.copiedModels.filter((model) => !shown.has(model.sourceId) && !added.has(model.sourceId));
+    const arrivingIds = new Set(arriving.map((model) => model.sourceId));
+    const upserted = new Set(changes.upsertedRelations.map((relation) => pairKey(relation.sourceId, relation.targetId)));
+    const relationsOfArriving = [...state.relations].filter(
+      ([pair, relation]) => !upserted.has(pair) && (arrivingIds.has(relation.sourceId) || arrivingIds.has(relation.targetId)),
+    );
+    return {
+      ...changes,
+      addedModels: [...changes.addedModels, ...arriving].filter((model) => model.copy !== undefined),
+      upsertedRelations: [...changes.upsertedRelations, ...relationsOfArriving.map(([, relation]) => relation)],
+    };
+  }
+
   private enqueue(changes: ProjectChanges, state: ProjectState): void {
     this.pending += 1;
     this.queue = this.queue.then(() => this.applyToCanvas(changes, state));
@@ -307,7 +330,7 @@ export class CanvasSync {
   private async applyToCanvas(changes: ProjectChanges, state: ProjectState): Promise<void> {
     try {
       if (!this.stopped) {
-        await this.canvas.apply(changes);
+        await this.canvas.apply(this.showable(changes, state));
         this.known = state;
       }
     } catch (error) {

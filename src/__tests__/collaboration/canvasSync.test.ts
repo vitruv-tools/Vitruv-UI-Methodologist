@@ -4,7 +4,7 @@ import { CanvasSync, SEED_CONFIRM_MS, type CanvasPort } from '../../collaboratio
 import { LAYOUT, LAYOUT_VSUM_CIRCLE, type VsumCircle } from '../../collaboration/document';
 import { ProjectDocument } from '../../collaboration/projectDocument';
 import { pairKey, type ProjectChanges, type ProjectState } from '../../collaboration/projectState';
-import { buildDocument, sync } from './testDocuments';
+import { buildDocument, copyOf, saveCopy, sync } from './testDocuments';
 
 const LOW_CODE = { id: 5, sourceId: 'a', targetId: 'b', lowCodeReactionRequestBase: { name: 'x' } };
 
@@ -25,11 +25,17 @@ class FakeCanvas implements CanvasPort {
   async apply(changes: ProjectChanges): Promise<void> {
     await this.held;
     this.applied.push(changes);
-    for (const model of changes.addedModels) this.state.models.set(model.sourceId, { ...model });
+    // Like the real canvas, it doesn't know the project's copy of a metamodel.
+    for (const { copy: _copy, ...model } of changes.addedModels) this.state.models.set(model.sourceId, model);
     for (const id of changes.removedModels) this.state.models.delete(id);
     for (const { sourceId, name } of changes.renamedModels) this.state.models.get(sourceId)!.name = name;
     for (const { sourceId, position } of changes.movedModels) this.state.models.get(sourceId)!.position = position;
-    for (const relation of changes.upsertedRelations) this.state.relations.set(pairKey(relation.sourceId, relation.targetId), { ...relation });
+    for (const relation of changes.upsertedRelations) {
+      // Like the real canvas: a relation needs the boxes of both metamodels.
+      if (this.state.models.has(relation.sourceId) && this.state.models.has(relation.targetId)) {
+        this.state.relations.set(pairKey(relation.sourceId, relation.targetId), { ...relation });
+      }
+    }
     for (const { sourceId, targetId } of changes.removedRelations) this.state.relations.delete(pairKey(sourceId, targetId));
     if (changes.reactionLayout) this.state.reactionLayout = changes.reactionLayout;
     if (changes.vsumCircle) this.circles.push([changes.vsumCircle, true]);
@@ -147,6 +153,7 @@ describe('changes of other users', () => {
 
     theirs.project.addModel({ sourceId: 4, name: 'Tire', position: { x: 5, y: 5 } });
     theirs.project.renameModel(1, 'Vehicle');
+    saveCopy(theirs.doc, 4);
     sync(theirs.doc, mine.doc);
     await mine.canvasSync.whenIdle();
 
@@ -200,6 +207,93 @@ describe('changes of other users', () => {
   });
 });
 
+describe('metamodels other users add', () => {
+  /** Mine and theirs, on one project. */
+  async function twoUsers() {
+    const server = serverDocument();
+    const mine = await started(client(server));
+    return { server, mine, theirs: client(server) };
+  }
+  const added = (canvas: FakeCanvas, sourceId: number) =>
+    canvas.applied.filter((changes) => changes.addedModels.some((model) => model.sourceId === sourceId)).length;
+
+  it('wait until the server saved them, then show where they are, as they are named, with their relations', async () => {
+    const { mine, theirs } = await twoUsers();
+
+    theirs.project.addModel({ sourceId: 4, name: 'Tire', position: { x: 5, y: 5 } });
+    theirs.project.upsertRelation({ sourceId: 1, targetId: 4, reactionFileId: 31 });
+    sync(theirs.doc, mine.doc);
+    await mine.canvasSync.whenIdle();
+    expect(mine.canvas.state.models.has(4)).toBe(false);
+
+    theirs.project.moveModels(new Map([[4, { x: 60, y: 60 }]]));
+    theirs.project.renameModel(4, 'Seat');
+    sync(theirs.doc, mine.doc);
+    saveCopy(theirs.doc, 4);
+    sync(theirs.doc, mine.doc);
+    await mine.canvasSync.whenIdle();
+
+    expect(mine.canvas.state.models.get(4)).toEqual({ sourceId: 4, name: 'Seat', position: { x: 60, y: 60 } });
+    expect(mine.canvas.state.relations.get(pairKey(1, 4))?.reactionFileId).toBe(31);
+    // The canvas is told the copy, whose ecore file it loads.
+    expect(mine.canvas.applied.at(-1)?.addedModels).toEqual([expect.objectContaining({ sourceId: 4, copy: copyOf(4) })]);
+  });
+
+  it('show right away if the project has their copy already', async () => {
+    const { mine, theirs } = await twoUsers();
+
+    theirs.project.addModel({ sourceId: 4, name: 'Tire', position: { x: 5, y: 5 } });
+    saveCopy(theirs.doc, 4);
+    sync(theirs.doc, mine.doc);
+    await mine.canvasSync.whenIdle();
+
+    expect(mine.canvas.state.models.has(4)).toBe(true);
+  });
+
+  it('never show if they are deleted before the server saved them', async () => {
+    const { mine, theirs } = await twoUsers();
+    theirs.project.addModel({ sourceId: 4, name: 'Tire', position: { x: 5, y: 5 } });
+    sync(theirs.doc, mine.doc);
+    await mine.canvasSync.whenIdle();
+
+    theirs.project.removeModel(4);
+    sync(theirs.doc, mine.doc);
+    await mine.canvasSync.whenIdle();
+
+    expect(mine.canvas.state.models.has(4)).toBe(false);
+    expect(added(mine.canvas, 4)).toBe(0);
+  });
+
+  it('show also for a user who opened the project before the server saved them', async () => {
+    const server = serverDocument();
+    const theirs = client(server);
+    theirs.project.addModel({ sourceId: 4, name: 'Tire', position: { x: 5, y: 5 } });
+    sync(theirs.doc, server);
+    const mine = await started(client(server));
+    expect(mine.canvas.state.models.has(4)).toBe(false);
+
+    saveCopy(server, 4);
+    sync(server, mine.doc);
+    await mine.canvasSync.whenIdle();
+
+    expect(mine.canvas.state.models.has(4)).toBe(true);
+  });
+
+  it('show once: a later copy of a metamodel the canvas shows changes nothing', async () => {
+    const { mine, theirs } = await twoUsers();
+    theirs.project.addModel({ sourceId: 4, name: 'Tire', position: { x: 5, y: 5 } });
+    saveCopy(theirs.doc, 4);
+    sync(theirs.doc, mine.doc);
+    await mine.canvasSync.whenIdle();
+
+    saveCopy(theirs.doc, 4, { ...copyOf(4), ecoreFileId: 999 });
+    sync(theirs.doc, mine.doc);
+    await mine.canvasSync.whenIdle();
+
+    expect(added(mine.canvas, 4)).toBe(1);
+  });
+});
+
 describe('changes of the user', () => {
   it('are written into the project: new metamodels, renames and moves', async () => {
     const mine = await started();
@@ -221,6 +315,7 @@ describe('changes of the user', () => {
 
     mine.canvas.addModel(4, 'Tire');
     mine.canvasSync.pushLocalChanges();
+    saveCopy(mine.doc, 4); // The server saved the new metamodel.
     sync(mine.doc, theirs.doc);
     await theirs.canvasSync.whenIdle();
 
@@ -340,7 +435,8 @@ describe('deleting', () => {
     mine.canvas.addModel(3, 'Wheel', 1, 1);
     mine.canvasSync.pushLocalChanges();
 
-    expect(mine.project.read().models.get(3)).toEqual({ sourceId: 3, name: 'Wheel', position: { x: 1, y: 1 } });
+    // It keeps the copy the backend still has, since the deletion wasn't written back.
+    expect(mine.project.read().models.get(3)).toEqual({ sourceId: 3, name: 'Wheel', position: { x: 1, y: 1 }, copy: copyOf(3) });
   });
 });
 
@@ -415,6 +511,8 @@ describe('undoing', () => {
     const mine = await started();
     mine.canvas.addModel(4, 'Tire', 9, 9);
     mine.canvasSync.pushLocalChanges();
+    saveCopy(mine.doc, 4); // The server saved the new metamodel.
+    await mine.canvasSync.whenIdle();
     mine.canvasSync.undo();
     await mine.canvasSync.whenIdle();
     expect(mine.canvas.state.models.has(4)).toBe(false);

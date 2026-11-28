@@ -35,10 +35,11 @@ export interface CanvasPortDeps {
   /** The canvas, or `null` if it isn't there (anymore). */
   getCanvas: () => CanvasHandle | null;
   /**
-   * Finds a metamodel that another user added, by its library ID, and loads its ecore file.
-   * Resolves `null` if it can't be found.
+   * Loads the ecore file of a metamodel that another user added, from the project's copy
+   * (`model.copy`), which the canvas is only told about once it has one. Resolves `null` if it
+   * can't be shown.
    */
-  resolveMetaModel: (sourceId: number) => Promise<ResolvedMetaModel | null>;
+  resolveMetaModel: (model: ModelState) => Promise<ResolvedMetaModel | null>;
   /** The reaction layout of the project the canvas keeps. */
   loadReactionLayout: () => Record<string, unknown>;
   /** Keeps the reaction layout the project has, where the canvas looks for it. */
@@ -90,7 +91,7 @@ export function createCanvasPort(deps: CanvasPortDeps): CanvasPort {
       }
 
       // The files load side by side; the boxes are added in the order of the changes.
-      const loaded = await Promise.all(changes.addedModels.map((model) => loadMetaModel(model.sourceId)));
+      const loaded = await Promise.all(changes.addedModels.map((model) => loadMetaModel(model)));
       changes.addedModels.forEach((model, index) => addMetaModel(canvas, model, loaded[index]));
 
       for (const { sourceId, name } of changes.renamedModels) {
@@ -127,9 +128,10 @@ export function createCanvasPort(deps: CanvasPortDeps): CanvasPort {
   };
 
   /** Loads a metamodel that another user added; `null` if that fails or it can't be found. */
-  async function loadMetaModel(sourceId: number): Promise<ResolvedMetaModel | null> {
+  async function loadMetaModel(model: ModelState): Promise<ResolvedMetaModel | null> {
+    const { sourceId } = model;
     try {
-      const resolved = await deps.resolveMetaModel(sourceId);
+      const resolved = await deps.resolveMetaModel(model);
       if (resolved === null) {
         console.error(`The metamodel ${sourceId} that another user added was not found.`);
       }

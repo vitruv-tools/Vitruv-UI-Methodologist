@@ -3,7 +3,7 @@ import * as Y from 'yjs';
 import { LAYOUT, LAYOUT_META_MODELS, LAYOUT_REACTIONS, MODELS, RELATIONS } from '../../collaboration/document';
 import { LOCAL_ORIGIN, ProjectDocument } from '../../collaboration/projectDocument';
 import { pairKey, type ProjectChanges, type ProjectState } from '../../collaboration/projectState';
-import { buildDocument, sync } from './testDocuments';
+import { buildDocument, copyOf, sync } from './testDocuments';
 
 const LOW_CODE = { id: 5, sourceId: 'a', targetId: 'b', lowCodeReactionRequestBase: { name: 'x' } };
 
@@ -40,7 +40,8 @@ describe('adding a metamodel', () => {
 
     p.addModel({ sourceId: 3, name: 'Wheel 2', position: { x: 7, y: 8 } });
 
-    expect(p.read().models.get(3)).toEqual({ sourceId: 3, name: 'Wheel 2', position: { x: 7, y: 8 } });
+    // The copy stays until the server wrote the deletion back.
+    expect(p.read().models.get(3)).toEqual({ sourceId: 3, name: 'Wheel 2', position: { x: 7, y: 8 }, copy: copyOf(3) });
     expect(model(p, 3).get('softDeletedVia')).toBeNull();
   });
 
@@ -60,7 +61,7 @@ describe('deleting a metamodel', () => {
 
     p.removeModel(2);
 
-    expect(model(p, 2).toJSON()).toEqual({ name: 'Brake', softDeleted: true, softDeletedVia: null });
+    expect(model(p, 2).toJSON()).toEqual({ name: 'Brake', ...copyOf(2), softDeleted: true, softDeletedVia: null });
     const relation = relationMaps(p)[0][1];
     expect(relation.get('softDeleted')).toBe(true);
     expect(relation.get('softDeletedVia')).toBe('2');
