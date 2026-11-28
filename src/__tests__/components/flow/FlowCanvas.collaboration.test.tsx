@@ -104,7 +104,7 @@ function collaborationMock() {
     pushReactionLayout: vi.fn(),
     pushVsumCircle: vi.fn(),
     seedVsumCircle: vi.fn(),
-    removeModel: vi.fn(),
+    removeModels: vi.fn(),
     removeRelation: vi.fn(),
     undo: vi.fn(() => true),
     redo: vi.fn(() => true),
@@ -366,7 +366,7 @@ describe('the shared VSUM circle', () => {
 
 describe('deleting', () => {
   /** Asks to remove a box, like the canvas does when its delete button is used, and confirms. */
-  function removeBoxAndConfirm(ref: React.RefObject<any>, sourceId: number) {
+  function removeBoxAndConfirm(sourceId: number) {
     const node = flow.props.nodes.find((n: Node) => n.id === `ecore-${sourceId}`);
     act(() => node.data.onRequestDelete(node.id));
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
@@ -376,10 +376,54 @@ describe('deleting', () => {
     const collaboration = collaborationMock();
     const { ref, nodeIds } = renderCanvas({ collaboration });
 
-    removeBoxAndConfirm(ref, 2);
+    removeBoxAndConfirm(2);
 
-    expect(collaboration.removeModel).toHaveBeenCalledTimes(1);
-    expect(collaboration.removeModel).toHaveBeenCalledWith(2);
+    expect(collaboration.removeModels).toHaveBeenCalledTimes(1);
+    expect(collaboration.removeModels).toHaveBeenCalledWith([2]);
+    expect(nodeIds()).toEqual(['ecore-1', 'ecore-3']);
+  });
+
+  /** Selects a box like a click on it; `additive` like Shift/Cmd+click. */
+  function select(sourceId: number, additive = false) {
+    const node = flow.props.nodes.find((n: Node) => n.id === `ecore-${sourceId}`);
+    act(() => node.data.onSelect(node.data.fileName, { additive }));
+  }
+
+  it('several selected boxes go with one confirmation, and the project is told once, so one undo brings them back', () => {
+    const collaboration = collaborationMock();
+    const onEcoreFileDelete = vi.fn();
+    const { nodeIds, edgeIds } = renderCanvas({ collaboration, onEcoreFileDelete });
+    select(1);
+    select(3, true);
+
+    act(() => { fireEvent.keyDown(document, { key: 'Delete' }); });
+    expect(screen.getByText('Remove the 2 selected meta models from the canvas?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+    expect(nodeIds()).toEqual(['ecore-2']);
+    expect(edgeIds()).toEqual([]);
+    expect(collaboration.removeModels).toHaveBeenCalledTimes(1);
+    expect(collaboration.removeModels).toHaveBeenCalledWith([1, 3]);
+    expect(onEcoreFileDelete.mock.calls).toEqual([['ecore-1'], ['ecore-3']]);
+  });
+
+  it('the delete button of a selected box removes all selected boxes', () => {
+    const { nodeIds } = renderCanvas();
+    select(1);
+    select(3, true);
+
+    removeBoxAndConfirm(3);
+
+    expect(nodeIds()).toEqual(['ecore-2']);
+  });
+
+  it('the delete button of a box outside the selection removes only that box', () => {
+    const { nodeIds } = renderCanvas();
+    select(1);
+    select(3, true);
+
+    removeBoxAndConfirm(2);
+
     expect(nodeIds()).toEqual(['ecore-1', 'ecore-3']);
   });
 
@@ -397,7 +441,7 @@ describe('deleting', () => {
     act(() => node.data.onRequestDelete(node.id));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
-    expect(collaboration.removeModel).not.toHaveBeenCalled();
+    expect(collaboration.removeModels).not.toHaveBeenCalled();
     expect(nodeIds()).toHaveLength(3);
   });
 
@@ -411,7 +455,7 @@ describe('deleting', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
     expect(collaboration.removeRelation).toHaveBeenCalledWith(1, 2);
-    expect(collaboration.removeModel).not.toHaveBeenCalled();
+    expect(collaboration.removeModels).not.toHaveBeenCalled();
   });
 
   it('never happens because the canvas was emptied, as when another project is loaded', () => {
@@ -421,7 +465,7 @@ describe('deleting', () => {
     act(() => ref.current.loadDiagramData([], []));
 
     expect(nodeIds()).toEqual([]);
-    expect(collaboration.removeModel).not.toHaveBeenCalled();
+    expect(collaboration.removeModels).not.toHaveBeenCalled();
     expect(collaboration.removeRelation).not.toHaveBeenCalled();
   });
 
@@ -432,13 +476,13 @@ describe('deleting', () => {
 
     act(() => node.data.onRequestDelete?.(node.id));
 
-    expect(collaboration.removeModel).not.toHaveBeenCalled();
+    expect(collaboration.removeModels).not.toHaveBeenCalled();
   });
 
   it('works as before without collaboration', () => {
     const { ref, nodeIds } = renderCanvas();
 
-    removeBoxAndConfirm(ref, 2);
+    removeBoxAndConfirm(2);
 
     expect(nodeIds()).toEqual(['ecore-1', 'ecore-3']);
   });

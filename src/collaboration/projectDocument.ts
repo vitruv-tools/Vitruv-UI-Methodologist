@@ -152,22 +152,36 @@ export class ProjectDocument {
 
   /** Deletes a metamodel, and with it its relations, which remember that this is why. */
   removeModel(sourceId: number): void {
-    this.write('delete a metamodel', () => {
-      const key = String(sourceId);
-      const existing = this.doc.getMap(MODELS).get(key);
-      if (!(existing instanceof Y.Map) || existing.get('softDeleted') === true) {
-        return;
-      }
-      existing.set('softDeleted', true);
-      existing.set('softDeletedVia', null);
-      for (const [, relation] of this.relationElements()) {
-        const isTouched = relation.get('sourceId') === sourceId || relation.get('targetId') === sourceId;
-        if (isTouched && relation.get('softDeleted') !== true) {
-          relation.set('softDeleted', true);
-          relation.set('softDeletedVia', key);
-        }
+    this.removeModels([sourceId]);
+  }
+
+  /**
+   * Deletes metamodels, and with them their relations, which remember that this is why. It is one
+   * step for undo, however many metamodels there are.
+   */
+  removeModels(sourceIds: number[]): void {
+    this.write('delete metamodels', () => {
+      for (const sourceId of sourceIds) {
+        this.softDeleteModel(sourceId);
       }
     });
+  }
+
+  private softDeleteModel(sourceId: number): void {
+    const key = String(sourceId);
+    const existing = this.doc.getMap(MODELS).get(key);
+    if (!(existing instanceof Y.Map) || existing.get('softDeleted') === true) {
+      return;
+    }
+    existing.set('softDeleted', true);
+    existing.set('softDeletedVia', null);
+    for (const [, relation] of this.relationElements()) {
+      const isTouched = relation.get('sourceId') === sourceId || relation.get('targetId') === sourceId;
+      if (isTouched && relation.get('softDeleted') !== true) {
+        relation.set('softDeleted', true);
+        relation.set('softDeletedVia', key);
+      }
+    }
   }
 
   renameModel(sourceId: number, name: string): void {

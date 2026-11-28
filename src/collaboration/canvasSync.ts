@@ -241,10 +241,15 @@ export class CanvasSync {
 
   /** The user deleted a metamodel from the canvas. */
   removeModel(sourceId: number): void {
-    if (this.known === undefined) {
+    this.removeModels([sourceId]);
+  }
+
+  /** The user deleted metamodels from the canvas at once: one step for undo. */
+  removeModels(sourceIds: number[]): void {
+    if (this.known === undefined || sourceIds.length === 0) {
       return;
     }
-    this.project.removeModel(sourceId);
+    this.project.removeModels(sourceIds);
     this.known = this.project.read();
   }
 
@@ -360,7 +365,7 @@ export type CanvasCollaboration = Pick<
   | 'pushReactionLayout'
   | 'pushVsumCircle'
   | 'seedVsumCircle'
-  | 'removeModel'
+  | 'removeModels'
   | 'removeRelation'
   | 'undo'
   | 'redo'

@@ -23,12 +23,17 @@ export function getPendingDeleteConfirmMessage(pendingDelete: PendingDeleteState
     return 'Do you really want to remove this element from the canvas?';
   }
 
-  const hasFile = Boolean(pendingDelete.fileId);
+  const files = pendingDelete.fileIds.length;
   const hasEdges = pendingDelete.edgeIds.length > 0;
   const hasOtherNodes = pendingDelete.nodeIds.length > 0;
 
-  if (hasFile && (hasEdges || hasOtherNodes)) {
-    return 'Remove the selected connection(s) and the meta model from the canvas?';
+  if (files > 0 && (hasEdges || hasOtherNodes)) {
+    return files === 1
+      ? 'Remove the selected connection(s) and the meta model from the canvas?'
+      : `Remove the selected connection(s) and the ${files} meta models from the canvas?`;
+  }
+  if (files > 1) {
+    return `Remove the ${files} selected meta models from the canvas?`;
   }
   if (hasEdges) {
     return 'Remove the selected connection from the canvas?';
@@ -264,10 +269,10 @@ export function applyPendingCanvasDelete(
 ): void {
   pendingDelete.edgeIds.forEach(removeEdge);
   pendingDelete.nodeIds.forEach(removeNode);
-  if (pendingDelete.fileId) {
-    removeNode(pendingDelete.fileId);
+  pendingDelete.fileIds.forEach(removeNode);
+  if (pendingDelete.fileIds.length > 0) {
     clearSelection();
-    onEcoreFileDelete?.(pendingDelete.fileId);
+    pendingDelete.fileIds.forEach(id => onEcoreFileDelete?.(id));
   }
 }
 
